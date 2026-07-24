@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Figure 7 —— 直接运行 SHAP，并把各子图分别单独成图
+SHAP 汇总图 —— 直接运行 SHAP，并把各子图分别单独成图
 ==================================================
 与之前不同：本脚本 **直接计算 SHAP**（不再读取 shap_merged.npy），
 完全复用 ``shap_vit_transformer_dualstream.py`` 的模型结构、数据加载、
@@ -62,6 +62,9 @@ from shap_vit_transformer_dualstream import (
 )
 import torch
 
+# 中文注释：SHAP 面板输出目录使用当前项目的集中路径配置。
+from config.paths import SHAP_FIGURE7_PANEL_DIR
+
 
 # ══════════════════════════════════════════════════════════════
 # ①  默认运行配置（取消 argparse，直接修改这里的变量即可）
@@ -79,8 +82,7 @@ N_BACKGROUND = 1000
 BATCH_SIZE = 50
 RANDOM_SEED = 42
 MODEL_WEIGHT_PATH = MODEL_PATH
-# 中文注释：输出目录复用 SHAP 基础脚本的 OUTPUT_DIR（config/paths.py 的 MODELS_DIR 下）。
-OUTPUT_PANEL_DIR = os.path.join(base.OUTPUT_DIR, 'figure7_panels_true_class_median')
+OUTPUT_PANEL_DIR = str(SHAP_FIGURE7_PANEL_DIR)
 DRAW_BEESWARM = True
 
 # 中文注释：如果缓存来自不同抽样策略，不要复用；正式无 Ba 区间筛选时建议重新计算。

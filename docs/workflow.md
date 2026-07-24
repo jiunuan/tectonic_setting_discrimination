@@ -39,11 +39,11 @@ flowchart TD
     F --> H["⑦分位数分箱归一化<br/>normalize.py (SMOTE 前训练集 fit)"]
     G --> H
     H --> I["⑧训练 + 消融 (显式缺失编码)<br/>ablation_v4_vit_transformer.py"]
-    I --> J["⑨SHAP 可解释性<br/>plot_shap_figure7_summary.py"]
-    K["太古代候选池 3,483 条 (SiO2≤54)<br/>extended_archean_pool_analysis.py<br/>+ standardize_craton_with_ai.py + 年龄人工核对"] --> L
+    I --> J["⑨SHAP 可解释性<br/>plot_shap_summary.py"]
+    K["太古代候选池 3,483 条 (SiO2≤54)<br/>extended_archean_pool_analysis.py<br/>+ standardize_craton_names.py + 年龄人工核对"] --> L
     I --> L["⑩太古代缺失编码预测<br/>archean_*_predict_analysis.py run_final_prediction()<br/>load_final_age_constrained_pool → 3,012 条 (SiO2≤53)"]
     H --> L
-    L --> N["⑩-1 Figure 9 重设计 + 敏感性<br/>figure9_redesign.py · figure9_sensitivity.py"]
+    L --> N["⑩-1 太古代时间演化 + 敏感性<br/>archean_time_evolution.py · archean_time_evolution_sensitivity.py"]
     L --> O["⑩-2 6 案例区组成 + 山脊图<br/>archean_case_studies_map_ridgeline.py"]
     L --> P["⑩-3 域偏移 / 分布一致性<br/>domain_shift_diagnostics.py · *_consistency.py"]
     C --> M["⑪数据分布箱线图 / 地理分布图<br/>selected_element_boxplots.py · distribution_elevation.py"]
@@ -65,12 +65,12 @@ flowchart TD
 | 6 | 选择性 SMOTE（仅训练集，5 类补到 3000） | `03_normalization/selective_smote.py` | `04_basalt_train_major_normalize.csv` | `06_normalized/05_basalt_train_selected_smote.csv` |
 | 7 | 分位数分箱归一化（SMOTE 前训练集 fit） | `03_normalization/normalize.py` | SMOTE 前/后训练集 + 测试集 | `06_normalized/06_normalize_basalt_train{,_no_smote}.csv`、`06_normalize_basalt_test.csv`、`quantile_params.json` |
 | 8 | 训练 + 消融 + 基线（显式缺失编码） | `04_model/ablation_v4_vit_transformer.py` | `06_normalize_basalt_{train,test}.csv` + 两个 missing mask | `models/` 权重 `.pth`、消融结果 CSV、图件 |
-| 9a | SHAP 可解释性 | `05_interpretation/plot_shap_figure7_summary.py`（依赖 `shap_vit_transformer_dualstream.py`） | 归一化训练/测试集 + missing mask + 模型权重 | `models/shap_analysis/figure7_panels_true_class_median/` 图件 |
-| 9b | Figure 7 a/c 从缓存重绘 | `05_interpretation/plot_shap_figure7_ac_from_saved.py` | 9a 保存的 `shap_merged_n*.npy` / `explain_idx_n*.npy` | `Figure7a_heatmap.png`、`Figure7c_ranking.png`、`Figure7a_c_combined.png` |
+| 9a | SHAP 可解释性 | `05_interpretation/plot_shap_summary.py`（依赖 `shap_vit_transformer_dualstream.py`） | 归一化训练/测试集 + missing mask + 模型权重 | SHAP 面板缓存目录中的图件 |
+| 9b | SHAP 面板从缓存重绘 | `05_interpretation/plot_shap_ac_from_saved.py` | 9a 保存的 `shap_merged_n*.npy` / `explain_idx_n*.npy` | 热图、排序图及组合面板 PNG |
 | 10a | 太古代候选池构建 | `06_archean_application/extended_archean_pool_analysis.py` | Liu 数据 + GeoROC 原始候选表 + PetDB 2.0 | `extended_archean_pool/expanded_archean_raw.csv` 等（3,483 条，SiO2≤54） |
-| 10b | 克拉通名称规范（LLM 辅助） | `06_archean_application/standardize_craton_with_ai.py` | 候选池预测表 | `extended_archean_pool/expanded_archean_basalt.csv`；经**年龄人工核对**并删除年龄为空记录后得到候选池 `expanded_archean_basalt_age_nonmissing.csv`（3,483 条） |
+| 10b | 克拉通名称规范（本地映射 + 人工核验） | `06_archean_application/standardize_craton_names.py` | 候选池预测表 | `extended_archean_pool/expanded_archean_basalt.csv`；经**年龄人工核对**并删除年龄为空记录后得到候选池 `expanded_archean_basalt_age_nonmissing.csv`（3,483 条） |
 | 10c | 太古代缺失编码预测（正式入口） | `06_archean_application/archean_vit_transformer_dualstream_predict_analysis.py`（`run_final_prediction()`） | 3,483 候选池 → `load_final_age_constrained_pool` 筛 SiO2≤53 得 3,012 条 + `quantile_params.json` + 模型权重 | `archean_geodan_final/expanded_archean_{missing_mask,predictions}.csv`、主图 + 6 案例区预测 |
-| 10d | Figure 9 重设计 + 分箱敏感性 | `06_archean_application/figure9_redesign.py`、`figure9_sensitivity.py` | `archean_geodan_final/expanded_archean_predictions.csv` | `archean_geodan_final/fig9_redesign_*.png`、`fig9_sensitivity.png` |
+| 10d | 太古代时间演化 + 分箱敏感性 | `06_archean_application/archean_time_evolution.py`、`archean_time_evolution_sensitivity.py` | `archean_geodan_final/expanded_archean_predictions.csv` | 时间演化主图、分箱敏感性 PNG |
 | 10e | 6 克拉通案例组成 + 山脊图 | `06_archean_application/archean_case_studies_map_ridgeline.py` | `archean_case_studies/predictions/*_predictions.csv` | `fig_case_studies_bars_ridgeline.png` 等 |
 | 10f | 适用域 / 域偏移诊断 | `06_archean_application/domain_shift_diagnostics.py` | 现代训练集 + 太古代集 | `archean/outputs/distribution_consistency/domain_shift_*` |
 | 10g | 分布一致性 | `06_archean_application/pca_distribution_consistency.py`、`training_application_distribution_consistency.py` | 现代全集 + 太古代集 | `distribution_consistency/` 一致性图件 |
@@ -114,14 +114,14 @@ python 03_normalization/normalize.py
 # 8 训练（需 GPU）
 python 04_model/ablation_v4_vit_transformer.py
 # 9 SHAP（true_class_median 口径；ac_from_saved 可从缓存重绘）
-python 05_interpretation/plot_shap_figure7_summary.py
-python 05_interpretation/plot_shap_figure7_ac_from_saved.py
+python 05_interpretation/plot_shap_summary.py
+python 05_interpretation/plot_shap_ac_from_saved.py
 # 10 太古代应用（已有候选池/正式预测时可只跑需要的子步）
 python 06_archean_application/extended_archean_pool_analysis.py
-python 06_archean_application/standardize_craton_with_ai.py   # 需配置 LLM API
+python 06_archean_application/standardize_craton_names.py     # geographic names were standardized and manually verified
 python 06_archean_application/archean_vit_transformer_dualstream_predict_analysis.py
-python 06_archean_application/figure9_redesign.py             # Figure 9 重设计主图
-python 06_archean_application/figure9_sensitivity.py          # Figure 9 分箱敏感性附图
+python 06_archean_application/archean_time_evolution.py       # 太古代时间演化主图
+python 06_archean_application/archean_time_evolution_sensitivity.py  # 时间分箱敏感性附图
 python 06_archean_application/archean_case_studies_map_ridgeline.py  # 6 案例区组成 + 山脊图
 # 11 数据分布图
 python 07_figures/selected_element_boxplots.py

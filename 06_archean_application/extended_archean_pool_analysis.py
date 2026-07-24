@@ -8,9 +8,8 @@
 
 所有输出写入 data/archean/outputs/extended_archean_pool/。
 本脚本产出 expanded_archean_raw.csv（合并去重后的扩展池）；
-正式 3,483 条应用集 expanded_archean_basalt_age_nonmissing.csv 还需
-经 standardize_craton_with_ai.py 克拉通名称规范与年龄人工核对，
-并删除年龄仍为空的记录。
+正式应用集需在候选池基础上使用已人工核验的地理名称和年龄结果，
+并删除年龄仍为空的记录；本脚本不执行现代插补、分位数编码或模型预测。
 """
 
 from __future__ import annotations
@@ -103,7 +102,11 @@ def normalize_major_elements(features: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def application_filter(features: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame, pd.Series]:
+def application_filter(
+    features: pd.DataFrame,
+    *,
+    sio2_max: float = SIO2_MAX,
+) -> tuple[pd.Series, pd.DataFrame, pd.Series]:
     """应用统一的太古代扩展池筛选条件。"""
     numeric = features[SHORT_COLUMNS].apply(pd.to_numeric, errors="coerce")
     missing_count = (numeric.isna() | numeric.le(0)).sum(axis=1)
@@ -113,7 +116,7 @@ def application_filter(features: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame,
     keep = (
         missing_count.lt(MAX_MISSING_EXCLUSIVE)
         & required
-        & normalized["SIO2"].between(SIO2_MIN, SIO2_MAX)
+        & normalized["SIO2"].between(SIO2_MIN, sio2_max)
         & normalized["MGO"].le(MGO_MAX)
     )
     return keep, normalized, missing_count
@@ -141,11 +144,14 @@ def extract_georoc_craton(location: object) -> str:
     return " ".join(selected.split()).strip()
 
 
-def build_liu_pool() -> pd.DataFrame:
+def build_liu_pool(*, sio2_max: float = SIO2_MAX) -> pd.DataFrame:
     """构建SiO2上限放宽到54 wt%的Liu扩展池。"""
     data = pd.read_csv(LIU_RAW_PATH, low_memory=False)
     features = data[SHORT_COLUMNS].apply(pd.to_numeric, errors="coerce")
-    keep, normalized, missing_count = application_filter(features)
+    keep, normalized, missing_count = application_filter(
+        features,
+        sio2_max=sio2_max,
+    )
     result = data.loc[keep].copy()
     result.loc[:, MAJOR_SHORT] = normalized.loc[keep, MAJOR_SHORT]
     result["missing_feature_count_36"] = missing_count.loc[keep].to_numpy()
@@ -160,7 +166,10 @@ def build_liu_pool() -> pd.DataFrame:
     return result.reset_index(drop=True)
 
 
-def build_georoc_recovered_pool() -> tuple[pd.DataFrame, dict]:
+def build_georoc_recovered_pool(
+    *,
+    sio2_max: float = SIO2_MAX,
+) -> tuple[pd.DataFrame, dict]:
     """恢复GeoROC中AGE文本含ARCHEAN且满足扩展应用QC的记录。"""
     ensure_import_paths()
     from iron_normalization import calculate_feot
@@ -173,7 +182,10 @@ def build_georoc_recovered_pool() -> tuple[pd.DataFrame, dict]:
     features = pd.DataFrame(index=data.index)
     for short_name, long_name in zip(SHORT_COLUMNS, LONG_COLUMNS):
         features[short_name] = pd.to_numeric(data[long_name], errors="coerce")
-    keep_application, normalized, missing_count = application_filter(features)
+    keep_application, normalized, missing_count = application_filter(
+        features,
+        sio2_max=sio2_max,
+    )
     keep = archean_mask & keep_application
 
     result = pd.DataFrame(index=data.index[keep])
@@ -260,6 +272,31 @@ def combine_and_deduplicate(liu: pd.DataFrame, georoc: pd.DataFrame) -> tuple[pd
     return combined.reset_index(drop=True), duplicate_count
 
 
+def build_expanded_candidate_pool(
+    *,
+    sio2_max: float = SIO2_MAX,
+    output_path: str | None = EXPANDED_RAW_PATH,
+) -> tuple[pd.DataFrame, dict]:
+    """按主项目逻辑构建Liu与GeoROC合并候选池，不执行模型推理。"""
+    liu = build_liu_pool(sio2_max=sio2_max)
+    georoc, georoc_stats = build_georoc_recovered_pool(sio2_max=sio2_max)
+    expanded, duplicate_count = combine_and_deduplicate(liu, georoc)
+
+    if output_path is not None:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        expanded.to_csv(output_path, index=False, encoding="utf-8-sig")
+
+    stats = {
+        "liu_rows": len(liu),
+        "georoc_rows": len(georoc),
+        "duplicate_rows": duplicate_count,
+        "expanded_rows": len(expanded),
+        **georoc_stats,
+    }
+    return expanded, stats
+
+
+# 中文注释：以下旧实验辅助函数仅保留供历史追溯，正式入口不会调用它们。
 def fit_and_transform_imputer(expanded: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """复用当前全局随机森林插补器，并返回无水标准化后的短列特征。"""
     imputation_module = _load_module_from_file(
@@ -356,147 +393,10 @@ def main() -> None:
 
     ARCHEAN_POOL_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("构建Liu SiO2<=54扩展池...")
-    liu = build_liu_pool()
-    print(f"  Liu扩展池: {len(liu)}")
-
-    print("恢复GeoROC中被年龄规则排除的太古代记录...")
-    georoc, georoc_stats = build_georoc_recovered_pool()
-    print(f"  GeoROC年龄命中: {georoc_stats['age_text_archean_rows']}")
-    print(f"  GeoROC通过应用QC: {len(georoc)}")
-
-    print("统计PetDB年龄文本...")
-    petdb_stats = petdb_archean_stats()
-    print(f"  PetDB拆行合并后年龄命中: {petdb_stats['consolidated_age_text_archean_rows']}")
-
-    liu_fingerprint = chemical_fingerprint(liu)
-    georoc_fingerprint = chemical_fingerprint(georoc)
-    liu_internal_duplicates = int(liu_fingerprint.duplicated().sum())
-    georoc_internal_duplicates = int(georoc_fingerprint.duplicated().sum())
-    cross_source_duplicate_rows = int(
-        georoc_fingerprint.isin(set(liu_fingerprint)).sum()
-    )
-    expanded, duplicate_count = combine_and_deduplicate(liu, georoc)
-    expanded.to_csv(EXPANDED_RAW_PATH, index=False, encoding="utf-8-sig")
-    print(f"合并后: {len(expanded)}，删除完全相同化学组成重复记录: {duplicate_count}")
-
-    print("拟合现代训练集全局随机森林插补器并转换扩展池...")
-    _, normalized_short = fit_and_transform_imputer(expanded)
-    imputed_output = expanded.copy()
-    for short_name in SHORT_COLUMNS:
-        imputed_output[short_name] = normalized_short[short_name].to_numpy()
-    imputed_output.to_csv(EXPANDED_IMPUTED_PATH, index=False, encoding="utf-8-sig")
-
-    print("执行训练集分位数编码和GeoDAN预测...")
-    encoded = quantile_encode(normalized_short)
-    encoded.to_csv(EXPANDED_FEATURE_PATH, index=False)
-    prediction, _, _ = run_prediction(encoded)
-    thresholds = add_domain_diagnostics(normalized_short, prediction)
-
-    prediction_output = pd.concat(
-        [
-            expanded[
-                [
-                    "SOURCE_DATASET",
-                    "POOL_COMPONENT",
-                    "SOURCE_ORIGINAL_TECTONIC_LABEL",
-                    "SOURCE_AGE_TEXT",
-                    "SOURCE_LOCATION",
-                    "Craton",
-                    "REFERENCE",
-                    "SAMPLE_ID",
-                    "ROCK_NAME",
-                    "missing_feature_count_36",
-                ]
-            ].reset_index(drop=True),
-            prediction.reset_index(drop=True),
-        ],
-        axis=1,
-    )
-    prediction_output.to_csv(EXPANDED_PREDICTION_PATH, index=False, encoding="utf-8-sig")
-
-    rows = []
-    for component, group in prediction_output.groupby("POOL_COMPONENT", dropna=False):
-        rows.append(
-            {
-                "component": component,
-                "n": len(group),
-                "high_arc_n": int(group["High_arc_P_ge_0_5"].sum()),
-                "high_arc_pct": 100.0 * group["High_arc_P_ge_0_5"].mean(),
-                "high_arc_in_99_domain_n": int(group["High_arc_and_in_99_domain"].sum()),
-                "knn_outside_99_pct": 100.0 * group["knn_outside_99"].mean(),
-                "mean_confidence": group["Prediction_confidence"].mean(),
-            }
-        )
-    rows.append(
-        {
-            "component": "ALL_EXPANDED",
-            "n": len(prediction_output),
-            "high_arc_n": int(prediction_output["High_arc_P_ge_0_5"].sum()),
-            "high_arc_pct": 100.0 * prediction_output["High_arc_P_ge_0_5"].mean(),
-            "high_arc_in_99_domain_n": int(
-                prediction_output["High_arc_and_in_99_domain"].sum()
-            ),
-            "knn_outside_99_pct": 100.0 * prediction_output["knn_outside_99"].mean(),
-            "mean_confidence": prediction_output["Prediction_confidence"].mean(),
-        }
-    )
-    summary = pd.DataFrame(rows)
-    summary.to_csv(EXPANDED_SUMMARY_PATH, index=False, encoding="utf-8-sig")
-
-    current_row = summary.loc[summary["component"] == "Liu_current_SiO2_le_53"].iloc[0]
-    liu_added_row = summary.loc[summary["component"] == "Liu_added_SiO2_53_to_54"].iloc[0]
-    georoc_row = summary.loc[summary["component"] == "GeoROC_recovered_ARCHEAN"]
-    georoc_row = georoc_row.iloc[0] if not georoc_row.empty else pd.Series(
-        {"n": 0, "high_arc_n": 0, "high_arc_in_99_domain_n": 0, "knn_outside_99_pct": np.nan}
-    )
-    all_row = summary.loc[summary["component"] == "ALL_EXPANDED"].iloc[0]
-    georoc_prediction = prediction_output.loc[
-        prediction_output["POOL_COMPONENT"] == "GeoROC_recovered_ARCHEAN"
-    ]
-    georoc_generic_craton = georoc_prediction[
-        "SOURCE_ORIGINAL_TECTONIC_LABEL"
-    ].eq("ARCHEAN CRATON (INCLUDING GREENSTONE BELTS)")
-    georoc_original_island_arc = georoc_prediction[
-        "SOURCE_ORIGINAL_TECTONIC_LABEL"
-    ].eq("Island arc")
-
-    report = f"""# 扩展太古代样品池高弧预测汇总
-
-## 年龄规则恢复统计
-
-- GeoROC原始记录：{georoc_stats['raw_rows']}条。
-- AGE文本包含`ARCHEAN`、曾被现代训练集提取流程直接排除：{georoc_stats['age_text_archean_rows']}条。
-- 其中按太古代应用口径（缺失特征<18、关键主量有效、无水SiO2={SIO2_MIN:g}-{SIO2_MAX:g} wt%、MgO<={MGO_MAX:g} wt%）保留：{georoc_stats['application_qc_rows']}条。
-- GeoROC应用QC结果中内部重复{georoc_internal_duplicates}条，与Liu池化学组成完全相同{cross_source_duplicate_rows}条；Liu池内部重复{liu_internal_duplicates}条。
-- PetDB原始记录：{petdb_stats['raw_rows']}条；拆行合并后：{petdb_stats['consolidated_rows']}条。
-- PetDB的`Geologic Age Prefix + Geologic Age`中包含`ARCHEAN`：原始{petdb_stats['raw_age_text_archean_rows']}条，拆行合并后{petdb_stats['consolidated_age_text_archean_rows']}条，因此当前文本规则实际淘汰0条。
-
-## 扩展后GeoDAN结果
-
-- Liu当前严格池（SiO2<=53）：{int(current_row['n'])}条，高弧{int(current_row['high_arc_n'])}条，其中现代99%适用域内{int(current_row['high_arc_in_99_domain_n'])}条。
-- Liu新增53<SiO2<=54：{int(liu_added_row['n'])}条，高弧{int(liu_added_row['high_arc_n'])}条，其中现代99%适用域内{int(liu_added_row['high_arc_in_99_domain_n'])}条。
-- GeoROC恢复池：{int(georoc_row['n'])}条，高弧{int(georoc_row['high_arc_n'])}条，其中现代99%适用域内{int(georoc_row['high_arc_in_99_domain_n'])}条。
-- 合并并按36元素三位小数完全一致去重后：{int(all_row['n'])}条，高弧{int(all_row['high_arc_n'])}条，其中现代99%适用域内{int(all_row['high_arc_in_99_domain_n'])}条。
-- 合并时删除完全相同化学组成重复记录：{duplicate_count}条。
-- 适用域使用{thresholds['n_pc']}个PC，累计解释{100 * thresholds['pca_variance']:.1f}%方差。
-
-## GeoROC原标签核验
-
-- 去重后的GeoROC恢复池中，原标签为`ARCHEAN CRATON (INCLUDING GREENSTONE BELTS)`的样品{int(georoc_generic_craton.sum())}条，其中高弧{int(georoc_prediction.loc[georoc_generic_craton, 'High_arc_P_ge_0_5'].sum())}条。
-- 原标签为`Island arc`的样品{int(georoc_original_island_arc.sum())}条，其中高弧{int(georoc_prediction.loc[georoc_original_island_arc, 'High_arc_P_ge_0_5'].sum())}条。
-- `ARCHEAN CRATON`是宽泛地质背景标签，不等价于精确的九分类构造真值。
-
-## 解释限制
-
-- GeoROC恢复记录来自现代训练库的原始候选表，原构造标签仅用于事后核验，没有参与插补或GeoDAN推理。
-- PetDB当前年龄字段没有`ARCHEAN`文本命中，不代表PetDB绝对不存在太古代样品；只写数值年龄或年龄元数据缺失的记录不会被该文本规则识别。
-- 扩展池仍保持`P_arc>=0.5`，没有通过降低概率阈值增加高弧数量。
-- 建议正文同时报告“全部高弧”和“现代99%适用域内高弧”，避免把域外高置信预测直接解释为可靠构造判定。
-"""
-    with open(EXPANDED_REPORT_PATH, "w", encoding="utf-8") as file:
-        file.write(report)
-    print(report)
+    # 中文注释：正式流程到此只生成候选池，插补、分位数编码和预测由独立正式脚本负责。
+    expanded, stats = build_expanded_candidate_pool()
+    print(f"候选池已生成: {len(expanded)} 条")
+    print(f"组成统计: {stats}")
 
 
 if __name__ == "__main__":

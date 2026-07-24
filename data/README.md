@@ -84,7 +84,7 @@ data/
     │                               Ivisaartoq / Norseman_Kambalda / Superior_Abitibi / North_China_Craton）
     └── outputs/                    （脚本运行时生成）
         ├── extended_archean_pool/  候选池 3,483 条（SiO2≤54，expanded_archean_basalt_age_nonmissing.csv）
-        ├── archean_geodan_final/   正式缺失编码预测（筛 SiO2≤53 得 3,012 条；含 Figure 9 重设计图）
+        ├── archean_geodan_final/   正式缺失编码预测（筛 SiO2≤53 得 3,012 条；含太古代时间演化图）
         ├── archean_case_studies/   6 克拉通案例预处理 / 预测 / 组成与山脊图
         └── distribution_consistency/  适用域 / 域偏移 / 分布一致性诊断
 ```
@@ -100,7 +100,7 @@ NA2O MGO AL2O3 SIO2 P2O5 K2O CAO TIO2 MNO FEOT   (10 主量氧化物, WT%)
 RB V CR CO NI BA SR Y ZR NB LA CE PR ND SM EU GD TB DY HO ER YB LU HF TA TH  (26 微量, PPM)
 ```
 
-构造为两种排列：**6×6 地化亲缘矩阵**（ViT 分支）与 **按不相容性排序的 36 元素序列**（Transformer 分支）。
+构造为两种排列：**6×6 地化亲缘矩阵**（ViT 分支）与 **按标准电极电势（E°）排序的 36 元素序列**（Transformer 分支）。
 
 ## 9 类构造环境标签（`TECTONIC SETTING`）
 

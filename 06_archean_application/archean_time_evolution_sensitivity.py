@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Figure 9 — 分箱敏感性分析（独立附图）
+# 太古代时间演化——分箱敏感性分析（独立附图）
 #
-#   目的：验证重构版 Figure 9 中识别出的三个时间特征
+#   目的：验证时间演化主图中识别出的三个时间特征
 #       · ~3.8 Ga      arc-like window
 #       · ~3.6–3.3 Ga  Ba-proxy decoupling
 #       · ~2.7–2.5 Ga  late Archean rise
@@ -16,7 +16,7 @@ from __future__ import annotations
 #         若特征位置与方向不随起点漂移，则不是 bin 边界造成的。
 #
 #   ★ 本脚本独立运行，复用原模块的数据读取与分箱流程，不修改任何原文件。
-#   输出：fig9_sensitivity.png（≥600 dpi）
+#   输出：时间分箱敏感性图（≥600 dpi）
 # ──────────────────────────────────────────────────────────────────────────────
 
 import sys
@@ -36,10 +36,11 @@ for _p in (_PROJECT_ROOT, _PREDICT_DIR):
         sys.path.insert(0, _p)
 
 import archean_vit_transformer_dualstream_predict_analysis as A  # noqa: E402
-import figure9_redesign as R  # noqa: E402  复用配色/窗口/装饰，保持与主图一致
+import archean_time_evolution as R  # noqa: E402  复用配色/窗口/装饰，保持与主图一致
+from config.paths import ZENODO_ARCHEAN_PREDICTIONS_CSV  # noqa: E402
 
 
-PREDICTION_CSV = A.FINAL_PREDICTION_PATH
+PREDICTION_CSV = Path(ZENODO_ARCHEAN_PREDICTIONS_CSV) if Path(ZENODO_ARCHEAN_PREDICTIONS_CSV).exists() else A.FINAL_PREDICTION_PATH
 OUTPUT_PATH = A.FINAL_OUTPUT_DIR / "fig9_sensitivity.png"
 
 # 中文注释：右端留到 2.40 Ga，避免最年轻 bin 的数据点贴边被裁剪（与主图一致）。
@@ -117,7 +118,7 @@ def _decorate(ax, *, show_xlabel: bool) -> None:
     """统一窗口阴影、坐标轴与风格，与主图一致（两套视觉语言：文献背景 vs 数据信号）。"""
     # 外部文献背景带（宽、主导）
     ax.axvspan(R.TRANSITION_CONTEXT["lo"], R.TRANSITION_CONTEXT["hi"],
-               color=R.TRANSITION_CONTEXT["color"], alpha=R.TRANSITION_ALPHA,
+               color=R.TRANSITION_CONTEXT["color"], alpha=R.WINDOW_ALPHA,
                lw=0.0, zorder=-2)
     # 数据信号①：~3.8 Ga 窄带
     ax.axvspan(R.ARC_NARROW_WINDOW["lo"], R.ARC_NARROW_WINDOW["hi"],
@@ -208,11 +209,11 @@ def build_sensitivity_figure(df: pd.DataFrame) -> None:
 
 def main() -> None:
     print("=" * 78)
-    print("Figure 9 分箱敏感性分析（100/150/200/300 Myr + 200 Myr 起点平移）")
+    print("太古代时间分箱敏感性分析（100/150/200/300 Myr + 200 Myr 起点平移）")
     print("=" * 78)
     df = load_samples()
     build_sensitivity_figure(df)
-    print("完成。原 Figure 9 及其输出文件未改动。")
+    print("完成。既有输出文件未改动。")
 
 
 if __name__ == "__main__":

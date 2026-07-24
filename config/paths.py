@@ -27,6 +27,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # ── 数据根 ───────────────────────────────────────────────────────
 DATA_DIR = PROJECT_ROOT / "data"
+# Zenodo 精简发布数据集（三张公开共享表；不纳入 GitHub）。
+ZENODO_DATASET_DIR = DATA_DIR / "basalt_geochemistry_dataset"
+ZENODO_MODERN_CSV = ZENODO_DATASET_DIR / "modern_basalt_geochemistry.csv"
+ZENODO_ARCHEAN_CSV = ZENODO_DATASET_DIR / "archean_basalt_geochemistry.csv"
+ZENODO_ARCHEAN_PREDICTIONS_CSV = ZENODO_DATASET_DIR / "archean_basalt_geodan_predictions.csv"
 
 # 各阶段目录（与 README 流程图编号一致）
 RAW_DIR        = DATA_DIR / "00_raw"            # 原始数据
@@ -97,6 +102,16 @@ QUANTILE_PARAMS_JSON    = NORMALIZED_DIR / "quantile_params.json"               
 # ════════════════════════════════════════════════════════════════
 GEODAN_DIR        = MODELS_DIR / "GeoDAN"
 MAIN_MODEL_WEIGHT = MODELS_DIR / "Full_Model_(ViT+Transformer)_best_seed.pth"
+# GeoDAN 训练后重绘 ROC/PR 曲线使用的缓存和输出。
+ROC_PR_CURVE_DATA_CSV = MODELS_DIR / "roc_pr_sci_comparison_curve_data.csv"
+ROC_PR_FROM_SAVED_PNG = MODELS_DIR / "roc_pr_sci_comparison_from_saved_curve_data.png"
+
+# SHAP 面板缓存与重绘输出。
+SHAP_ANALYSIS_DIR = MODELS_DIR / "shap_analysis"
+SHAP_FIGURE7_PANEL_DIR = SHAP_ANALYSIS_DIR / "figure7_panels_true_class_median"
+SHAP_FIGURE7A_PATH = SHAP_FIGURE7_PANEL_DIR / "Figure7a_heatmap.png"
+SHAP_FIGURE7C_PATH = SHAP_FIGURE7_PANEL_DIR / "Figure7c_ranking.png"
+SHAP_FIGURE7AC_PATH = SHAP_FIGURE7_PANEL_DIR / "Figure7a_c_combined.png"
 
 # ════════════════════════════════════════════════════════════════
 # archean —— 太古代应用（缺失编码：不插补，缺失值数值编码 0 + mask 1）
@@ -115,10 +130,10 @@ ARCHEAN_POOL_MASK_CSV   = ARCHEAN_POOL_DIR / "expanded_archean_missing_mask.csv"
 ARCHEAN_FINAL_DIR             = ARCHEAN_OUTPUT_DIR / "archean_geodan_final"
 ARCHEAN_FINAL_MASK_CSV        = ARCHEAN_FINAL_DIR / "expanded_archean_missing_mask.csv"
 ARCHEAN_FINAL_PREDICTIONS_CSV = ARCHEAN_FINAL_DIR / "expanded_archean_predictions.csv"
-
+ARCHEAN_FIG7_SENSITIVITY_DIR  = ARCHEAN_FINAL_DIR / "fig7_sensitivity_variants"
 # 6 克拉通案例研究输出
 ARCHEAN_CASE_DIR = ARCHEAN_OUTPUT_DIR / "archean_case_studies"
-
+ARCHEAN_CASE_PREDICTIONS_DIR = ARCHEAN_CASE_DIR / "predictions"
 # 分布一致性 / 适用域诊断输出
 ARCHEAN_CONSISTENCY_DIR = ARCHEAN_OUTPUT_DIR / "distribution_consistency"
 
@@ -126,3 +141,10 @@ ARCHEAN_CONSISTENCY_DIR = ARCHEAN_OUTPUT_DIR / "distribution_consistency"
 # 论文图件输出
 # ════════════════════════════════════════════════════════════════
 FIGURES_DIR = DATA_DIR / "figures"
+FIGURE_ASSETS_DIR = FIGURES_DIR / "assets"
+WORLD_BASEMAP_PNG = FIGURE_ASSETS_DIR / "ocean_world_4326_z3_4096x1935.png"
+MODERN_DISTRIBUTION_MAP_PNG = FIGURES_DIR / "distribution_basalt_map_esri.png"
+ARCHEAN_DISTRIBUTION_MAP_PNG = FIGURES_DIR / "archean_basalt_geodan_prediction_distribution_map_esri.png"
+
+# 插补方法对比附图输出。
+IMPUTATION_COMPARISON_DIR = IMPUTED_DIR / "imputation_comparison_output"

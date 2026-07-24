@@ -42,6 +42,7 @@ from config.paths import (
     ARCHEAN_DATA_SUBDIR,
     ARCHEAN_CASE_DIR,
     ARCHEAN_POOL_CSV,
+    ZENODO_ARCHEAN_CSV,
 )
 
 
@@ -143,62 +144,84 @@ def normalize_major_elements(features: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
+def application_filter(
+    features: pd.DataFrame,
+    *,
+    sio2_min: float = SIO2_MIN,
+    sio2_max: float = SIO2_MAX,
+    mgo_max: float = MGO_MAX,
+    max_missing_exclusive: int = MAX_MISSING_FEATURES_EXCLUSIVE,
+) -> tuple[pd.Series, pd.DataFrame, pd.Series]:
+    """执行与主项目一致的完整度、关键主量和玄武岩范围筛选。"""
+    numeric = features[SHORT_CHEMICAL_COLUMNS].apply(
+        pd.to_numeric,
+        errors="coerce",
+    )
+    missing_count = (numeric.isna() | numeric.le(0)).sum(axis=1)
+    required = numeric[REQUIRED_MAJOR_COLUMNS].notna().all(axis=1)
+    required &= numeric[REQUIRED_MAJOR_COLUMNS].gt(0).all(axis=1)
+    normalized = normalize_major_elements(numeric)
+    keep = (
+        missing_count.lt(max_missing_exclusive)
+        & required
+        & normalized["SIO2"].between(sio2_min, sio2_max)
+        & normalized["MGO"].le(mgo_max)
+    )
+    return keep, normalized, missing_count
+
+
 def preprocess_archean(
     data: pd.DataFrame,
     expected_sample_count: int | None = None,
     *,
-    dataset_name: str = '太古代样品',
+    dataset_name: str = "太古代样品",
+    sio2_min: float = SIO2_MIN,
+    sio2_max: float = SIO2_MAX,
+    mgo_max: float = MGO_MAX,
 ) -> pd.DataFrame:
-    """执行与 PCA 脚本完全一致的太古代样品筛选（44-53 wt% 正式口径）。"""
+    """按主项目正式口径筛选全库、Liu 或案例区数据。"""
     features = extract_chemical_features(data)
-    original_count = len(data)
+    missing_counts = (features.isna() | features.le(0)).sum(axis=1)
+    keep_missing = missing_counts.lt(MAX_MISSING_FEATURES_EXCLUSIVE)
 
-    # NaN、0和负值均视为缺失。
-    missing_counts = (features.isna() | (features <= 0)).sum(axis=1)
-    keep_missing = missing_counts < MAX_MISSING_FEATURES_EXCLUSIVE
-    features_after_missing = features.loc[keep_missing].copy()
-    count_after_missing = len(features_after_missing)
+    required_values = features.loc[
+        keep_missing,
+        REQUIRED_MAJOR_COLUMNS,
+    ]
+    keep_required_local = required_values.notna().all(axis=1)
+    keep_required_local &= required_values.gt(0).all(axis=1)
+    required_indices = required_values.index[keep_required_local]
 
-    # 五个关键主量必须为有效正值。
-    required_values = features_after_missing[REQUIRED_MAJOR_COLUMNS]
-    keep_required = (
-        required_values.notna().all(axis=1)
-        & (required_values > 0).all(axis=1)
-    )
-    features_after_required = features_after_missing.loc[keep_required].copy()
-    count_after_required = len(features_after_required)
-
-    # SiO2和MgO筛选使用无水标准化后的数值。
-    normalized_features = normalize_major_elements(features_after_required)
+    # 中文注释：只对通过关键主量检查的样品执行无水标准化。
+    normalized_features = normalize_major_elements(features.loc[required_indices])
     keep_basalt = (
-        normalized_features['SIO2'].between(SIO2_MIN, SIO2_MAX)
-        & normalized_features['MGO'].le(MGO_MAX)
+        normalized_features["SIO2"].between(sio2_min, sio2_max)
+        & normalized_features["MGO"].le(mgo_max)
     )
     final_features = normalized_features.loc[keep_basalt].copy()
     final_indices = final_features.index
 
     result = data.loc[final_indices].copy()
-    # 中文注释：统一补充短列名，保证案例表和全库表可进入同一预测流程。
     for column in SHORT_CHEMICAL_COLUMNS:
         if column in MAJOR_COLUMNS:
             result[column] = final_features[column]
         elif column not in result.columns:
             result[column] = features.loc[final_indices, column]
     result.loc[:, MAJOR_COLUMNS] = final_features[MAJOR_COLUMNS]
-    result['missing_feature_count_36'] = missing_counts.loc[
+    result["missing_feature_count_36"] = missing_counts.loc[
         final_indices
     ].to_numpy()
     result.reset_index(drop=True, inplace=True)
 
-    print(f'[{dataset_name}] 原始样品: {original_count}')
+    print(f"[{dataset_name}] 原始样品: {len(data)}")
     print(
-        f'[{dataset_name}] 缺失数 < {MAX_MISSING_FEATURES_EXCLUSIVE}: '
-        f'{count_after_missing}'
+        f"[{dataset_name}] 缺失数 < {MAX_MISSING_FEATURES_EXCLUSIVE}: "
+        f"{int(keep_missing.sum())}"
     )
-    print(f'[{dataset_name}] 五项关键主量有效: {count_after_required}')
+    print(f"[{dataset_name}] 五项关键主量有效: {len(required_indices)}")
     print(
-        f'[{dataset_name}] 无水SiO2={SIO2_MIN:g}-{SIO2_MAX:g}, '
-        f'MgO<={MGO_MAX:g}: {len(result)}'
+        f"[{dataset_name}] 无水SiO2={sio2_min:g}-{sio2_max:g}, "
+        f"MgO<={mgo_max:g}: {len(result)}"
     )
 
     if expected_sample_count is not None and len(result) != expected_sample_count:
@@ -218,7 +241,9 @@ def load_final_age_constrained_pool(
     候选池为 SiO2≤54 的 3,483 条；经与训练集一致的 44-53 wt% 口径筛选后，
     得到正式应用集 3,012 条（与 EXPECTED_FINAL_COUNT 一致）。
     """
-    data = read_csv_fallback(ARCHEAN_POOL_CSV)
+    # 中文注释：正式候选池未复制到流程输出目录时，回退读取 Zenodo 精简发布的太古代应用表。
+    pool_csv = ZENODO_ARCHEAN_CSV if Path(ZENODO_ARCHEAN_CSV).exists() else ARCHEAN_POOL_CSV
+    data = read_csv_fallback(pool_csv)
     return preprocess_archean(
         data,
         expected_sample_count=expected_sample_count,
@@ -251,7 +276,7 @@ CASE_RAW_OUTPUT_DIR = CASE_STUDY_OUTPUT_ROOT / 'raw'
 CASE_PREPROCESSED_OUTPUT_DIR = CASE_STUDY_OUTPUT_ROOT / 'preprocessed'
 CASE_PREDICTIONS_OUTPUT_DIR = CASE_STUDY_OUTPUT_ROOT / 'predictions'
 CASE_SUMMARY_CSV_PATH = CASE_PREDICTIONS_OUTPUT_DIR / 'case_study_summary.csv'
-# 中文注释：左栏六联柱状图、右栏高弧KDE山脊图的组合主图。
+# 中文注释：左栏案例组成热力图、右栏高弧KDE山脊图的组合主图。
 CASE_FIG_COMBINED_PATH = (
     CASE_PREDICTIONS_OUTPUT_DIR / 'fig_case_studies_bars_ridgeline.png'
 )

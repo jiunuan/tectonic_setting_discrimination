@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Figure 9（重构版）——共享时间轴下的太古代多证据对齐图
+# 太古代时间演化图——共享时间轴下的多证据对齐图
 #
 #   本脚本是 archean_vit_transformer_dualstream_predict_analysis.py 中
-#   plot_main_composite_figure（原 Figure 9）的"独立重构版本"。
+#   plot_main_composite_figure 的独立重构版本。
 #
-#   设计目标：把 Figure 9 从"结果堆叠图"改为"共享时间轴下的多证据对齐图"，
+#   设计目标：把结果堆叠图改为"共享时间轴下的多证据对齐图"，
 #   风格参考 Nature Communications / Nature Geoscience / Earth-Science Reviews
 #   常见的深时演化综合图。图内只保留必要的面板标签、坐标轴、图例、少量时间窗口
 #   短标签与误差说明，解释性文字一律留给图注和正文。
@@ -53,6 +53,7 @@ for _p in (_PROJECT_ROOT, _PREDICT_DIR):
         sys.path.insert(0, _p)
 
 import archean_vit_transformer_dualstream_predict_analysis as A  # noqa: E402
+from config.paths import ZENODO_ARCHEAN_PREDICTIONS_CSV  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -60,14 +61,14 @@ import archean_vit_transformer_dualstream_predict_analysis as A  # noqa: E402
 # ══════════════════════════════════════════════════════════════════════════════
 
 # 数据来源：直接复用原主线流程的产物与配置
-PREDICTION_CSV = A.FINAL_PREDICTION_PATH          # 已保存的 9 分类预测结果
+PREDICTION_CSV = Path(ZENODO_ARCHEAN_PREDICTIONS_CSV) if Path(ZENODO_ARCHEAN_PREDICTIONS_CSV).exists() else A.FINAL_PREDICTION_PATH  # 已保存的 9 分类预测结果
 SOURCE_S3_CSV  = A.SOURCE_S3_CSV_PATH             # Liu et al. 2024 原始数据（外部参照）
 TRAIN_CSV      = A.TRAIN_PATH                     # 读取类别顺序
 BIN_SIZE_MYR   = A.BIN_SIZE_MYR                   # 主图分箱（200 Myr）
 HIGH_STD       = A.HIGH_STD
 ARC_THRESHOLD  = 0.5                              # GeoDAN 弧亲和性阈值（与原主图一致）
 
-# 输出目录沿用原最终输出目录，但使用全新文件名，避免覆盖原 Figure 9
+# 输出目录沿用原最终输出目录，但使用独立文件名，避免覆盖既有结果。
 OUTPUT_DIR        = A.FINAL_OUTPUT_DIR
 FIG_MAIN_PATH     = OUTPUT_DIR / "fig9_redesign_main.png"
 FIG_PANELC_RAW    = OUTPUT_DIR / "fig9_redesign_panelC_raw.png"
@@ -162,7 +163,7 @@ COL_BAR_ARC   = "#C0392B"   # GeoDAN 典型弧端元 CA+IA+IOA（红）
 COL_LINE_ARC  = "#2E5C8A"   # GeoDAN 典型弧端元比例折线（蓝）
 
 GRID_GRAY = "#C8C8C8"
-SPINE_GRAY = "#888888"
+SPINE_GRAY = "#000000"
 BINLINE_GRAY = "#E6E6E6"    # 200 Myr bin centers 竖向虚线（很浅）
 WINDOW_ALPHA = 0.25         # 增强缓冲区颜色，仍保持数据曲线可辨识
 
@@ -384,18 +385,24 @@ def _annotate_events_in_panel_a(ax) -> None:
             linespacing=0.95, zorder=7)
 
 
+def _apply_boxed_panel(ax, linewidth: float = 0.6) -> None:
+    """给坐标轴加四条边框边界线。"""
+    # 中文注释：所有面板保留上、下、左、右四条轴脊，形成完整图框。
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_color(SPINE_GRAY)
+        spine.set_linewidth(linewidth)
+        spine.set_capstyle("butt")
+
+
 def _style_panel(ax, *, show_xlabel: bool) -> None:
-    """统一面板风格：白底、浅灰轴、简化边框、反向时间轴。"""
+    """统一面板风格：白底、浅灰四边框、反向时间轴。"""
     ax.set_facecolor("#FFFFFF")
     ax.set_xlim(X_OLD, X_YOUNG)
     ax.set_xticks(X_TICKS)
     # 中文注释：所有主面板的 y 轴刻度标签统一为 9 pt。
     ax.tick_params(axis="y", labelsize=9)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(SPINE_GRAY)
-        ax.spines[side].set_linewidth(0.8)
+    _apply_boxed_panel(ax)
     if show_xlabel:
         ax.set_xlabel("Age (Ga)", fontsize=10.5)
     else:
@@ -663,20 +670,21 @@ def _draw_panel_b(ax, frames: dict, centers: np.ndarray) -> "plt.Axes":
     # 中文注释：右轴固定 0–70%——折线趋势更突出；Liu 峰值(~61%)仍在轴内，
     # 左上角图例仍在数据之上。
     ax2.set_ylim(0.0, 0.7)
-    ax2.spines["right"].set_position(("axes", 0.99))
+    ax2.spines["right"].set_position(("axes", 1.0))
     # ax2.set_ylabel("Arc-related affinity (%)", fontsize=10.5, labelpad=10)
     # 中文注释：百分号仅保留在轴标题中，刻度显示 0、20、40、60。
     ax2.set_yticks([0.0, 0.2, 0.4, 0.6])
-    ax2.spines["right"].set_color("#555555")
-    ax2.spines["right"].set_linewidth(0.8)
+    # 中文注释：twinx 会叠加第二套坐标轴；隐藏其左、下、上边框，避免黑色默认轴脊压住主图灰色边框。
+    for side in ("left", "bottom", "top"):
+        ax2.spines[side].set_visible(False)
+    ax2.spines["right"].set_color(SPINE_GRAY)
+    ax2.spines["right"].set_linewidth(0.6)
+    ax2.spines["right"].set_capstyle("butt")
     ax2.set_ylabel("Arc-related affinity (%)", color="#222222", fontsize=10, labelpad=10)
     ax2.yaxis.set_major_formatter(
         mticker.FuncFormatter(lambda value, position: f"{value * 100:.0f}")
     )
     ax2.tick_params(axis="y", labelsize=9)
-    ax2.spines["top"].set_visible(False)
-    # ax2.spines["right"].set_color(SPINE_GRAY)
-    ax2.spines["right"].set_linewidth(0.8)
     ax2.grid(False)
 
     # ── 图例只保留柱状；采用无边框单行布局，与 Panel (c) 的轻量风格一致。──
@@ -707,7 +715,8 @@ def _draw_panel_b(ax, frames: dict, centers: np.ndarray) -> "plt.Axes":
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _add_subduction_signature_arrow(ax, direction: str,
-                                     text_position: str) -> None:
+                                     text_position: str,
+                                     y_offset: float = 0.0) -> None:
     """在指标小图左侧添加沿增强方向逐渐加深的低饱和箭头。"""
     if direction == "up":
         start_y, end_y = 0.20, 0.82
@@ -717,6 +726,10 @@ def _add_subduction_signature_arrow(ax, direction: str,
         gradient = np.linspace(0.72, 0.08, 256).reshape(-1, 1)
     else:
         raise ValueError(f"未知箭头方向: {direction}")
+
+    # 中文注释：y_offset 使用坐标轴比例单位，只微调箭头和文字的竖向位置。
+    start_y += y_offset
+    end_y += y_offset
 
     # 中文注释：先创建单个完整箭头路径，再把渐变图层裁剪到该路径内，
     # 使箭头和箭杆连续一体，避免分开绘制产生重叠横带。
@@ -744,6 +757,7 @@ def _add_subduction_signature_arrow(ax, direction: str,
         text_y, va = 0.11, "bottom"
     else:
         raise ValueError(f"未知文字位置: {text_position}")
+    text_y += y_offset
     ax.text(
         0.012, text_y, "Subduction signature",
         transform=ax.transAxes, ha="left", va=va,
@@ -756,7 +770,8 @@ def _draw_indicator_panel(ax, ind_stats: dict[str, pd.DataFrame], centers,
                           linestyle, label: str,
                           signature_direction: str,
                           signature_text_position: str,
-                          show_subset_legend: bool = False) -> None:
+                          show_subset_legend: bool = False,
+                          signature_y_offset: float = 0.0) -> None:
     """使用独立线性 y 轴绘制加权均值及非对称 bootstrap 95% CI。"""
     _draw_windows(ax)
     _draw_bin_center_lines(ax, centers)
@@ -843,7 +858,7 @@ def _draw_indicator_panel(ax, ind_stats: dict[str, pd.DataFrame], centers,
             handlelength=1.8, columnspacing=1.0,
         )
     _add_subduction_signature_arrow(
-        ax, signature_direction, signature_text_position,
+        ax, signature_direction, signature_text_position, signature_y_offset,
     )
 
 
@@ -857,7 +872,7 @@ def _draw_geochemical_panels(ax_c, ax_d, ax_e,
     )
     _draw_indicator_panel(
         ax_d, ind_stats, centers, "Th_Nb", COL_TH_NB, "s",
-        "-", "Th/Nb", "up", "bottom",
+        "-", "Th/Nb", "up", "bottom", signature_y_offset=-0.04,
     )
     _draw_indicator_panel(
         ax_e, ind_stats, centers, "Nb_La", COL_NB_LA, "o", "-", "Nb/La",
@@ -906,16 +921,20 @@ def build_main_figure(frames: dict, ind_stats: dict[str, pd.DataFrame]) -> None:
     _style_panel(ax_d, show_xlabel=False)
     _style_panel(ax_e, show_xlabel=True)
 
+    # 中文注释：y 轴标题和 a-e 子图编号使用两个独立横坐标，避免误改导致版面串动。
+    y_label_x = -0.065
+    panel_label_x = -0.072
+
     # 中文注释：固定五个左侧 y 轴标题的横向坐标，避免不同刻度宽度造成错位。
     for ax in (ax_a, ax_b, ax_c, ax_d, ax_e):
-        ax.yaxis.set_label_coords(-0.065, 0.5)
+        ax.yaxis.set_label_coords(y_label_x, 0.5)
 
-    # 中文注释：零面板间距下，编号放回各自绘图区内部，避免压到上一面板。
+    # 中文注释：零面板间距下，编号统一向右微调，避免压到上一面板。
     for ax, lab, y_pos in [
-        (ax_a, "(a)", 1.0), (ax_b, "(b)", 0.985),
-        (ax_c, "(c)", 0.985), (ax_d, "(d)", 0.985), (ax_e, "(e)", 0.985),
+        (ax_a, "a", 1.0), (ax_b, "b", 0.985),
+        (ax_c, "c", 0.985), (ax_d, "d", 0.988), (ax_e, "e", 0.985),
     ]:
-        ax.text(-0.092, y_pos, lab, transform=ax.transAxes, fontsize=13,
+        ax.text(panel_label_x, y_pos, lab, transform=ax.transAxes, fontsize=16,
                 fontweight="bold", va="top", ha="left", zorder=12)
 
     FIG_MAIN_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -962,11 +981,7 @@ def build_panel_c_raw(frames: dict, ind_stats: dict[str, pd.DataFrame]) -> None:
     ax.set_xticks(X_TICKS)
     ax.set_xlabel("Age (Ga)", fontsize=10.5)
     ax.set_ylabel("Weighted mean elemental ratio (log scale)", fontsize=10.5)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(SPINE_GRAY)
-        ax.spines[side].set_linewidth(0.8)
+    _apply_boxed_panel(ax)
     # 中文注释：附加导出的 Panel (c) 同样不显示格网。
     ax.grid(False)
     # 中文注释：附图沿用主图 Panel (c) 的轻量无边框图例风格。
@@ -992,7 +1007,7 @@ def build_panel_c_raw(frames: dict, ind_stats: dict[str, pd.DataFrame]) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 CAPTION_TEXT = """\
-Figure 9. Shared-time-axis synthesis of Archean tectonic affinity and geochemistry
+Archean time-evolution synthesis of tectonic affinity and geochemistry
 (4.0 → 2.5 Ga, old to young), in which externally literature-constrained tectonic
 context and this study's data signals are deliberately drawn in two different
 visual languages. The thin pale-orange line beneath the geological-period strip
@@ -1064,7 +1079,7 @@ def write_indicator_audit(ind_stats: dict[str, pd.DataFrame]) -> None:
 
 def main() -> None:
     print("=" * 78)
-    print("Figure 9 重构版（共享时间轴多证据对齐图）")
+    print("太古代时间演化图（共享时间轴多证据对齐图）")
     print("=" * 78)
     frames = load_core_frames()
     ind_stats = compute_indicator_stats(frames["df"])
@@ -1072,7 +1087,7 @@ def main() -> None:
     build_panel_c_raw(frames, ind_stats)
     write_caption()
     write_indicator_audit(ind_stats)
-    print("完成。原 Figure 9 及其输出文件未改动，可随时回退对比。")
+    print("完成。既有输出文件未改动，可随时回退对比。")
 
 
 if __name__ == "__main__":

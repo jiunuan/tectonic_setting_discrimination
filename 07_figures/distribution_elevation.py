@@ -1,16 +1,17 @@
-﻿import sys
-from pathlib import Path
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from pathlib import Path
+import sys
+
+# 中文注释：现代玄武岩全球分布图读取当前项目合并总表和外部世界底图资产。
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from config.paths import COMBINED_CSV, ZENODO_MODERN_CSV, WORLD_BASEMAP_PNG, MODERN_DISTRIBUTION_MAP_PNG
 from matplotlib.image import imread
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config.paths import COMBINED_CSV, FIGURES_DIR
-
-# 读取合并总表（含经纬度与构造环境标签）。
-file_path = str(COMBINED_CSV)
+# 读取CSV文件
+# 中文注释：现代样品点位读取当前项目合并总表。
+file_path = str(ZENODO_MODERN_CSV if Path(ZENODO_MODERN_CSV).exists() else COMBINED_CSV)
 df = pd.read_csv(file_path, encoding='utf-8')
 
 # 提取经纬度数据和构造环境数据
@@ -89,12 +90,12 @@ colors = [tectonic_colors.get(setting, 'gray') for setting in tectonic_settings]
 fig, ax = plt.subplots(figsize=(26, 14))
 
 # 读取本地世界地图图像
-# 中文注释：世界底图为外部资源，请放在 data/figures/assets/ 下（仓库不附带该大图）。
-world_map_path = str(FIGURES_DIR / "assets" / "ocean_world_4326_z3_4096x1935.png")
+# 中文注释：底图是外部资产，按 README 放在 data/figures/assets 下。
+world_map_path = str(WORLD_BASEMAP_PNG)
 # 是否降低底图视觉强度：True 表示底图变浅，False 表示使用原始底图
 reduce_basemap_intensity = True
 # 底图变浅强度，数值越大越接近白色
-basemap_fade_strength = 0.28
+basemap_fade_strength = 0.36
 world_map = imread(world_map_path)
 
 # 显示世界地图图像，可选择是否与白色混合以降低底图视觉强度，让样点更突出
@@ -108,13 +109,18 @@ else:
 ax.imshow(world_map_display, extent=[-180, 180, -90, 90], aspect='auto')
 
 # 绘制数据点
-sc = ax.scatter(longitudes, latitudes, c=colors, s=60, alpha=1, edgecolor='k', zorder=5)
+# 中文注释：用轻微偏移的半透明黑点模拟阴影，让样点从底图上浮起一点。
+shadow_longitudes = np.asarray(longitudes, dtype=float) + 0.55
+shadow_latitudes = np.asarray(latitudes, dtype=float) - 0.35
+ax.scatter(shadow_longitudes, shadow_latitudes, c='black', s=40, alpha=0.02, edgecolor='none', zorder=4)
+# 中文注释：适当放大样点，让全球分布图中的点位更容易辨认。
+sc = ax.scatter(longitudes, latitudes, c=colors, s=80, alpha=1, edgecolor='k', linewidth=0.7, zorder=5)
 
 # 设置经纬度刻度和标签
 ax.set_xticks(np.arange(-180, 181, 60))
 ax.set_yticks(np.arange(-90, 91, 45))
-ax.set_xticklabels(['180°W', '120°W', '60°W', '0°', '60°E', '120°E', '180°E'], fontsize=18)
-ax.set_yticklabels(['90°S', '45°S', '0°', '45°N', '90°N'], fontsize=18)
+ax.set_xticklabels(['180°W', '120°W', '60°W', '0°', '60°E', '120°E', '180°E'], fontsize=26)
+ax.set_yticklabels(['90°S', '45°S', '0°', '45°N', '90°N'], fontsize=26)
 
 ax.tick_params(axis='x', length=10, pad=20)  # 增加 x 轴标签的垂直间距
 ax.tick_params(axis='y', length=10, pad=10)  # 增加 y 轴标签的水平间距
@@ -122,21 +128,40 @@ ax.tick_params(axis='y', length=10, pad=10)  # 增加 y 轴标签的水平间距
 ax.set_xlim(-180, 180)
 ax.set_ylim(-90, 90)
 
+# 中文注释：显式设置整张地图面板外框，避免依赖 Matplotlib 默认边框样式。
+for spine in ax.spines.values():
+    spine.set_visible(True)
+    spine.set_color('#000000')
+    spine.set_linewidth(0.6)
+
 # 添加图例
+# 中文注释：固定图例顺序，避免受 tectonic_colors 字典定义顺序影响。
+legend_order = [
+    'Continental arc',
+    'Island arc',
+    'Intra-oceanic arc',
+    'BACK-ARC_BASIN',
+    'OCEANIC PLATEAU',
+    'OCEAN ISLAND',
+    'CONTINENTAL FLOOD BASALT',
+    'SPREADING_CENTER',
+    'CONTINENTAL_RIFT'
+]
 legend_elements = [plt.Line2D([0], [0], marker='o', color='w',
                               label=f"{label_mapping[setting]}",
-                              markerfacecolor=color, markersize=20)
-                   for setting, color in tectonic_colors.items()]
+                              markerfacecolor=tectonic_colors[setting], markeredgecolor='k',
+                              markeredgewidth=0.9, markersize=16)
+                   for setting in legend_order]
 
 # 将图例放在右下角
 ax.legend(handles=legend_elements, loc='lower right', bbox_to_anchor=(0.79, -0.005),
-          ncol=3, fontsize=24)
+          ncol=3, fontsize=24, columnspacing=0.8)
 
 # 添加底图来源标注，避免图片使用时遗漏版权/来源信息
-ax.text(0.915, 0.02, 'ESRI GEBCO Garmin',
+ax.text(0.936, 0.012, 'ESRI GEBCO Garmin',
         transform=ax.transAxes,
         ha='right', va='bottom',
-        fontsize=20, color='black',
+        fontsize=16, color='#666666',
         # bbox=dict(facecolor='white', edgecolor='none', alpha=0.65, pad=3),
         zorder=10)
 # 调整布局以适应图例
@@ -144,7 +169,8 @@ plt.tight_layout()
 ax.set_aspect('auto')  # 或者使用 'equal'
 
 # 保存图像
-output_path = str(FIGURES_DIR / "distribution_basalt_map_esri.png")
+# 中文注释：输出正式现代玄武岩全球分布图。
+output_path = str(MODERN_DISTRIBUTION_MAP_PNG)
 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 plt.savefig(output_path, dpi=200)
 

@@ -72,7 +72,7 @@ basalt_tectonic_discrimination/
 ├── 02_imputation/             # 全局随机森林插补（train fit / test transform）+ 缺失 mask
 ├── 03_normalization/          # 主量无水标准化 + 选择性 SMOTE（仅训练集）+ 分位数分箱归一化
 ├── 04_model/                  # ViT–Transformer 双流训练（显式缺失编码）+ 消融/对比/基线 + 5 折 CV
-├── 05_interpretation/         # SHAP 可解释性（Figure 7）
+├── 05_interpretation/         # SHAP 可解释性
 ├── 06_archean_application/    # 太古代扩展应用集构建 + 缺失编码预测 + 适用域/一致性分析
 ├── 07_figures/                # 论文图件（现代玄武岩数据分布箱线图）
 ├── tools/geochem_workflow_designer/  # 可视化工作流编排器（Python + Vue）
@@ -132,16 +132,16 @@ python 04_model/ablation_v4_vit_transformer.py
 # ④-1 可选：在现有 80% 训练集内部执行 5 折交叉验证（需 GPU）
 python 04_model/kfold_vit_transformer.py
 
-# ⑤ SHAP 可解释性（Figure 7，true_class_median 口径）
-python 05_interpretation/plot_shap_figure7_summary.py
-python 05_interpretation/plot_shap_figure7_ac_from_saved.py   # 可选：从缓存重绘 a/c 子图
+# ⑤ SHAP 可解释性（true_class_median 口径）
+python 05_interpretation/plot_shap_summary.py
+python 05_interpretation/plot_shap_ac_from_saved.py   # 可选：从缓存重绘 a/c 子图
 
 # ⑥ 太古代应用（缺失编码，不插补；候选池 3,483 → 正式应用集 3,012）
 python 06_archean_application/extended_archean_pool_analysis.py            # 构建候选池
-python 06_archean_application/standardize_craton_with_ai.py                # 克拉通名称规范（需 LLM API）
+python 06_archean_application/standardize_craton_names.py                  # 克拉通名称规范（人工核验的本地映射）
 python 06_archean_application/archean_vit_transformer_dualstream_predict_analysis.py  # 正式预测 + 主图 + 6 案例区
-python 06_archean_application/figure9_redesign.py                          # Figure 9 重设计主图
-python 06_archean_application/figure9_sensitivity.py                       # Figure 9 分箱敏感性附图
+python 06_archean_application/archean_time_evolution.py                   # 太古代时间演化主图
+python 06_archean_application/archean_time_evolution_sensitivity.py        # 太古代时间分箱敏感性
 python 06_archean_application/archean_case_studies_map_ridgeline.py        # 6 案例区组成 + 山脊图
 
 # ⑦ 论文数据分布图
@@ -220,10 +220,10 @@ python app.py          # 启动后端 API + Vue 前端
 |---|---|
 | 现代玄武岩各元素数据分布箱线图 | `07_figures/selected_element_boxplots.py` |
 | 现代玄武岩全球地理分布图（需自备世界底图） | `07_figures/distribution_elevation.py` |
-| SHAP 全局/分类重要性与方向（Figure 7，true_class_median 口径） | `05_interpretation/plot_shap_figure7_summary.py` |
-| Figure 7 a/c 从缓存重绘（不重算 SHAP） | `05_interpretation/plot_shap_figure7_ac_from_saved.py` |
+| SHAP 全局/分类重要性与方向（true_class_median 口径） | `05_interpretation/plot_shap_summary.py` |
+| SHAP a/c 面板从缓存重绘（不重算 SHAP） | `05_interpretation/plot_shap_ac_from_saved.py` |
 | 太古代构造亲和性随年龄/克拉通演化、与传统判别指标对比 | `06_archean_application/archean_vit_transformer_dualstream_predict_analysis.py` |
-| Figure 9 重设计（弧亲和性随年龄演化主图）+ 分箱敏感性附图 | `06_archean_application/figure9_redesign.py`、`figure9_sensitivity.py` |
+| 太古代弧亲和性随年龄演化主图 + 分箱敏感性附图 | `06_archean_application/archean_time_evolution.py`、`archean_time_evolution_sensitivity.py` |
 | 6 克拉通案例构造组成柱状图 + 高弧信号年龄山脊图 | `06_archean_application/archean_case_studies_map_ridgeline.py` |
 | 现代训练集 vs 太古代应用集分布一致性（PCA / 主量 / 判别比值） | `06_archean_application/pca_distribution_consistency.py`、`training_application_distribution_consistency.py` |
 | 现代 vs 太古代域偏移 / kNN 适用域诊断 | `06_archean_application/domain_shift_diagnostics.py` |
@@ -254,8 +254,12 @@ python app.py          # 启动后端 API + Vue 前端
 }
 ```
 
-## 10. 许可 / 致谢 / 联系
+## 10. 许可 / 致谢
 
-- **许可**：本项目以 [MIT License](LICENSE) 开源（请在 `LICENSE` 中补全作者信息）。
+- **许可**：本项目以 [MIT License](LICENSE) 开源。
 - **致谢**：GEOROC、PetDB 数据库及相关数据贡献者；Liu et al. (2024) 太古代数据集。
-- **联系**：`<作者邮箱 / 通讯方式占位>`
+
+## Contact
+
+Shu-zhao Wu<br>
+shuzhao.wu@cugb.edu.cn.

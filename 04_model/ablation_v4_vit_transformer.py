@@ -38,6 +38,7 @@ import warnings
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 import torch
@@ -71,11 +72,9 @@ except ImportError:
     XGBClassifier = None
 
 warnings.filterwarnings('ignore')
-
-# 中文注释：保留目标工程的统一路径配置，方便在另一台电脑上运行。
+# 中文注释：统一从当前项目配置读取数据和模型输出路径，避免保留 CNNtest 本地路径。
 import sys
 from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config.paths import MODELS_DIR, TRAIN_NORM_CSV, TEST_NORM_CSV, MASK_TRAIN_CSV, MASK_TEST_CSV
 
@@ -84,7 +83,7 @@ from config.paths import MODELS_DIR, TRAIN_NORM_CSV, TEST_NORM_CSV, MASK_TRAIN_C
 # ════════════════════════════════════════════
 # SEEDS          = [42, 123, 456, 789, 1024]
 SEEDS          = [42, 123]
-PRINT_EVERY   = 100   # 中文注释：每10轮打印一次，避免长训练产生过量终端输出。
+PRINT_EVERY   = 1   # 中文注释：每10轮打印一次，避免长训练产生过量终端输出。
 ML_PRINT_EVERY = 100   # ← v4: ML(MLP) 每 20 个 epoch 打印一次
 # 中文注释：SMOTE后关闭类别加权，避免对少数类重复补偿。
 USE_CLASS_WEIGHTED_LOSS = False
@@ -97,6 +96,26 @@ SCI_CMAPS = [
     # ('viridis',  'viridis'),    # 感知均匀（Nature/Science 推荐）
     # ('Oranges',  'Oranges'),    # 橙色序列（暖调清晰）
 ]
+
+# 中文注释：统一训练输出中的混淆矩阵画法，与 confusion_matrices/data.py 保持一致。
+GEODAN_CONFUSION_ORDER = ["CA", "IA", "IOA", "BAB", "MOR", "OP", "OI", "CR", "CF"]
+SOFT_GEODAN_CMAP = LinearSegmentedColormap.from_list(
+    "soft_geodan_blue_high_end",
+    [
+        (0.00, "#f8fafc"),
+        (0.05, "#edf3f8"),
+        (0.10, "#e1edf5"),
+        (0.30, "#c8ddeb"),
+        (0.60, "#8fb9d4"),
+        (0.78, "#4f8fbd"),
+        (0.84, "#2f74aa"),
+        (0.88, "#1f6099"),
+        (0.92, "#124f8c"),
+        (0.96, "#0b3f78"),
+        (1.00, "#062f62"),
+    ],
+    N=256,
+)
 
 
 def set_seed(seed=42):
@@ -118,6 +137,77 @@ def safe_filename(name: str) -> str:
     while '__' in name:
         name = name.replace('__', '_')
     return name.strip('_')
+
+
+def _reorder_geodan_confusion_matrix(cm_pct, class_names):
+    """中文注释：按论文图中的地质类别顺序重排混淆矩阵。"""
+    if set(GEODAN_CONFUSION_ORDER).issubset(set(class_names)):
+        order_idx = [class_names.index(label) for label in GEODAN_CONFUSION_ORDER]
+        return cm_pct[np.ix_(order_idx, order_idx)], GEODAN_CONFUSION_ORDER
+    return cm_pct, class_names
+
+
+def _plot_geodan_confusion_matrix(cm_pct, class_names, save_path):
+    """中文注释：绘制与独立混淆矩阵脚本一致的 GeoDAN 风格百分比矩阵。"""
+    cm_plot, labels_plot = _reorder_geodan_confusion_matrix(cm_pct, list(class_names))
+    fig, ax = plt.subplots(figsize=(7.2, 6.2), dpi=600)
+
+    im = ax.imshow(
+        cm_plot,
+        cmap=SOFT_GEODAN_CMAP,
+        vmin=0,
+        vmax=100,
+        interpolation="nearest",
+        aspect="equal",
+    )
+
+    # 中文注释：坐标轴标签与独立绘图脚本保持一致。
+    ax.set_xticks(np.arange(len(labels_plot)))
+    ax.set_yticks(np.arange(len(labels_plot)))
+    ax.set_xticklabels(labels_plot, fontsize=10, fontweight="semibold")
+    ax.set_yticklabels(labels_plot, fontsize=10, fontweight="semibold")
+    ax.set_xlabel("Predicted label", fontsize=10)
+    ax.set_ylabel("True label", fontsize=10)
+
+    # 中文注释：细白网格降低模板感，分组线对应 arc/back-arc/oceanic/continental。
+    ax.set_xticks(np.arange(-0.5, len(labels_plot), 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(labels_plot), 1), minor=True)
+    ax.grid(which="minor", color="white", linestyle="-", linewidth=0.3)
+    ax.tick_params(which="minor", bottom=False, left=False)
+    if len(labels_plot) == len(GEODAN_CONFUSION_ORDER):
+        for pos in [3.5, 6.5]:
+            ax.axhline(pos, color="#6f7f8f", linewidth=0.35, alpha=0.35)
+            ax.axvline(pos, color="#6f7f8f", linewidth=0.35, alpha=0.35)
+
+    # 中文注释：所有格子保留一位小数，深色格子用白字提高可读性。
+    for i in range(cm_plot.shape[0]):
+        for j in range(cm_plot.shape[1]):
+            value = cm_plot[i, j]
+            text_color = "white" if value >= 55 else "#1f1f1f"
+            fontweight = "semibold" if i == j else "normal"
+            ax.text(
+                j, i, f"{value:.1f}",
+                ha="center", va="center",
+                fontsize=10,
+                color=text_color,
+                fontweight=fontweight,
+            )
+
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.8)
+        spine.set_color("#333333")
+
+    # 中文注释：colorbar 绑定主图，保证色带高度与矩阵主体一致，并保留稍大的间距。
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3.5%", pad=0.24)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.set_label("Row-normalized percentage (%)", fontsize=9)
+    cbar.ax.tick_params(labelsize=9, width=0.6)
+    cbar.outline.set_linewidth(0.6)
+
+    plt.tight_layout()
+    fig.savefig(save_path, dpi=1200, bbox_inches="tight")
+    plt.close(fig)
 
 
 # =============================================================
@@ -166,7 +256,7 @@ IMAGE_COLUMNS_V2 = [col for row in IMAGE_GRID_V2 for col in row]
 
 
 # =============================================================
-# 序列分支输入：按不相容性从高到低排列（共 36 列）
+# 序列分支输入：正式 v1 按标准电极电势（E°）排列（共 36 列）
 # =============================================================
 
 SEQUENCE_COLUMNS_V2 = [
@@ -378,7 +468,7 @@ def load_presplit_csv(
 
     print(f'\n  训练集: {X_train_img.shape[0]} | 测试集: {X_test_img.shape[0]} | 类别数: {len(unique)}')
     print(f'  矩阵输入形状: {X_train_img.shape[1:]}')
-    print(f'  序列输入形状: {X_train_seq.shape[1:]}  (按不相容性排序)')
+    print(f'  序列输入形状: {X_train_seq.shape[1:]}  (按标准电极电势 E° 排序)')
     print(f'  训练集分布: {dict(sorted(collections.Counter(y_train).items()))}')
     print(f'  测试集分布: {dict(sorted(collections.Counter(y_test).items()))}')
     return X_train_img, X_train_seq, y_train, X_test_img, X_test_seq, y_test, unique
@@ -1434,28 +1524,14 @@ def _ml_plot_confusion_matrix(cm, output_dir, classes, model_name, label_mapping
                                normalize=True):
     classes_mapped = [label_mapping.get(c, c) for c in classes]
     if normalize:
-        cm = np.around(cm.astype(float) / cm.sum(axis=1)[:, np.newaxis] * 100, 1)
-    thresh = cm.max() / 2.0
-    for cmap_name, cmap_label in SCI_CMAPS:
-        fig, ax = plt.subplots(figsize=(10, 8))
-        im = ax.imshow(cm, interpolation='nearest', cmap=cmap_name)
-        ax.figure.colorbar(im, ax=ax)
-        ax.set_xticks(np.arange(cm.shape[1]))
-        ax.set_yticks(np.arange(cm.shape[0]))
-        ax.set_xticklabels(classes_mapped, rotation=45, ha='right', rotation_mode='anchor')
-        ax.set_yticklabels(classes_mapped)
-        ax.set_ylabel('True Label')
-        ax.set_xlabel('Predicted Label')
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                ax.text(j, i, format(cm[i, j], '.1f' if normalize else 'd'),
-                        ha='center', va='center',
-                        color='white' if cm[i, j] > thresh else 'black')
-        ax.set_title(f'{model_name} Confusion Matrix')
-        fig.tight_layout()
-        save_path = os.path.join(output_dir, f'confusion_matrix_{model_name}_{cmap_label}.png')
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()
+        row_sum = cm.sum(axis=1, keepdims=True)
+        cm = np.divide(
+            cm.astype(float), row_sum,
+            out=np.zeros_like(cm, dtype=float),
+            where=row_sum != 0,
+        ) * 100.0
+    save_path = os.path.join(output_dir, f'confusion_matrix_{model_name}_soft_geodan.png')
+    _plot_geodan_confusion_matrix(cm, classes_mapped, save_path)
 
 
 def _ml_plot_pr_curve(y_onehot, y_probs, output_dir, model_name,
@@ -1543,7 +1619,8 @@ def _ml_train_and_evaluate(model_name, model,
           f'Macro F1: {result["macro_f1"]:.4f} | mAP: {result["mAP"]:.4f}')
     print(classification_report(result['y_true'], result['y_pred'], zero_division=0))
 
-    cm = confusion_matrix(result['y_true'], result['y_pred'])
+    # 中文注释：固定 labels，确保 ML 混淆矩阵维度与类别标签一一对应。
+    cm = confusion_matrix(result['y_true'], result['y_pred'], labels=np.arange(num_classes))
     _ml_plot_confusion_matrix(cm, output_dir, unique_labels, model_name, label_mapping)
     y_onehot = label_binarize(result['y_true'], classes=np.arange(num_classes))
     _ml_plot_pr_curve(y_onehot, result['y_probs'],
@@ -1697,47 +1774,10 @@ def plot_ablation_comparison(all_results, output_dir, unique_labels, label_mappi
             out=np.zeros_like(cm, dtype=float),
             where=row_sum != 0,
         ) * 100.0
-        n_cls = cm.shape[0]
-        display_name = (r['model_name'].replace('\n', ' ')
-                        .replace('Full Model (ViT+Transformer)', 'GeoDAN')
-                        .replace('Full Model', 'GeoDAN')
-                        .strip())
         fname = safe_filename(r['model_name'])
-        for cmap_name, cmap_label in SCI_CMAPS:
-            fig_cm, ax_cm = plt.subplots(figsize=(max(7, n_cls + 1), max(6, n_cls)))
-            im = ax_cm.imshow(cm_pct, interpolation='nearest', cmap=cmap_name,
-                              vmin=0, vmax=100, aspect='equal')
-
-            # 关键：把 colorbar 绑定到 ax_cm 的右侧,高度自动与矩阵一致
-            divider = make_axes_locatable(ax_cm)
-            cax = divider.append_axes("right", size="4%", pad=0.35)
-            cbar = fig_cm.colorbar(im, cax=cax)
-            cbar.set_label('Percentage (%)', fontsize=14)
-            cbar.ax.tick_params(labelsize=12)
-
-            ax_cm.set_xticks(range(n_cls))
-            ax_cm.set_yticks(range(n_cls))
-            ax_cm.set_xticklabels(class_names, rotation=0, ha='center',
-                                  rotation_mode='anchor', fontsize=13)
-            ax_cm.set_yticklabels(class_names, fontsize=13)
-
-            for i in range(n_cls):
-                for j in range(n_cls):
-                    color = 'white' if cm_pct[i, j] > 50 else 'black'
-                    ax_cm.text(j, i, f'{cm_pct[i, j]:.1f}',
-                               ha='center', va='center', color=color,
-                               fontsize=12)   # 原来是 8,放大到 12
-
-            ax_cm.set_xlabel('Predicted Label', fontsize=15, labelpad=8)
-            ax_cm.set_ylabel('True Label',      fontsize=15, labelpad=8)
-            ax_cm.set_title(f'{display_name} Confusion Matrix',
-                            fontsize=16, fontweight='bold', pad=12)
-
-            plt.tight_layout()
-            save_path = os.path.join(cm_dir, f'cm_{fname}_{cmap_label}.png')
-            fig_cm.savefig(save_path, dpi=300, bbox_inches='tight')
-            plt.close(fig_cm)
-            print(f'  混淆矩阵已保存: {save_path}')
+        save_path = os.path.join(cm_dir, f'cm_{fname}_soft_geodan.png')
+        _plot_geodan_confusion_matrix(cm_pct, class_names, save_path)
+        print(f'  混淆矩阵已保存: {save_path}')
 
     names   = [r['model_name'].replace('\n', '\n') for r in all_results]
     metric_keys   = ['accuracy', 'f1_score', 'macro_f1', 'precision', 'recall', 'mAP']
@@ -1854,7 +1894,7 @@ def plot_roc_pr_sci_comparison(all_results, output_dir,
       - 白底 / 浅灰网格
       - 6 模型 micro-averaged ROC + PR 曲线
       - 图例带 AUC / mAP 数值
-      - (a)(b) 子图标签
+      - a/b 子图标签
 
     参数:
         all_results        : 所有实验结果字典列表（DL + ML）
@@ -1936,23 +1976,34 @@ def plot_roc_pr_sci_comparison(all_results, output_dir,
             return style_map[6]
         return ('default', '#7f8c8d', 1.6, '-')
 
+    def _apply_boxed_panel(ax, linewidth: float = 0.6) -> None:
+        """统一为太古代时间演化图的黑色细边框风格。"""
+        # 中文注释：ROC/PR 子图边框与太古代时间演化主图保持一致。
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color('#000000')
+            spine.set_linewidth(linewidth)
+            spine.set_capstyle('butt')
+        ax.tick_params(width=linewidth)
+
     # ── 设置 SCI 期刊字体风格 ──────────────────────────────────
     plt.rcParams.update({
         'font.family':       'sans-serif',
         'font.sans-serif':   ['Arial', 'Helvetica', 'DejaVu Sans'],
-        'axes.linewidth':    1.2,
-        'axes.labelsize':    13,
-        'axes.titlesize':    13,
-        'xtick.labelsize':   11,
-        'ytick.labelsize':   11,
-        'xtick.major.width': 1.0,
-        'ytick.major.width': 1.0,
+        'axes.edgecolor':     '#000000',
+        'axes.linewidth':    0.6,
+        'axes.labelsize':    15,
+        'axes.titlesize':    15,
+        'xtick.labelsize':   13,
+        'ytick.labelsize':   13,
+        'xtick.major.width': 0.6,
+        'ytick.major.width': 0.6,
         'xtick.direction':   'out',
         'ytick.direction':   'out',
-        'legend.fontsize':   10,
+        'legend.fontsize':   12,
         'legend.frameon':    True,
         'legend.framealpha': 0.95,
-        'legend.edgecolor':  '#333333',
+        'legend.edgecolor':  '#000000',
     })
 
     fig, axes = plt.subplots(1, 2, figsize=figsize)
@@ -1996,11 +2047,12 @@ def plot_roc_pr_sci_comparison(all_results, output_dir,
     ax.set_ylabel('True Positive Rate')
     ax.grid(True, color='#dddddd', linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
-    leg_a = ax.legend(loc='lower right', edgecolor='#333333',
+    _apply_boxed_panel(ax)
+    leg_a = ax.legend(loc='lower right', edgecolor='#000000',
                       fancybox=False, framealpha=0.95)
-    leg_a.get_frame().set_linewidth(0.8)
-    ax.text(-0.13, 1.04, '(a)', transform=ax.transAxes,
-            fontsize=15, fontweight='bold', va='top', ha='left')
+    leg_a.get_frame().set_linewidth(0.6)
+    ax.text(-0.13, 1.04, 'a', transform=ax.transAxes,
+            fontsize=18, fontweight='bold', va='top', ha='left')
 
     # ── (b) PR ──────────────────────────────────────────────────
     ax = axes[1]
@@ -2014,11 +2066,12 @@ def plot_roc_pr_sci_comparison(all_results, output_dir,
     ax.set_ylabel('Precision')
     ax.grid(True, color='#dddddd', linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
-    leg_b = ax.legend(loc='lower left', edgecolor='#333333',
+    _apply_boxed_panel(ax)
+    leg_b = ax.legend(loc='lower left', edgecolor='#000000',
                       fancybox=False, framealpha=0.95)
-    leg_b.get_frame().set_linewidth(0.8)
-    ax.text(-0.13, 1.04, '(b)', transform=ax.transAxes,
-            fontsize=15, fontweight='bold', va='top', ha='left')
+    leg_b.get_frame().set_linewidth(0.6)
+    ax.text(-0.13, 1.04, 'b', transform=ax.transAxes,
+            fontsize=18, fontweight='bold', va='top', ha='left')
 
     plt.tight_layout()
     save_path_png = os.path.join(output_dir, 'roc_pr_sci_comparison.png')
@@ -2068,7 +2121,8 @@ def save_per_seed_csv(all_dl_results, output_dir):
 # =============================================================
 
 if __name__ == '__main__':
-    # 中文注释：训练集、测试集和缺失掩码使用目标工程中的完整路径。
+    # 中文注释：路径按完整字符串写出，避免路径拼接导致运行环境差异。
+    # 中文注释：读取SMOTE后的训练集；模型仍为原始单通道结构，不使用缺失掩码。
     # 中文注释：使用原始空间全局插补、无水标准化和分位数编码后的主流程数据。
     TRAIN_FILE = str(TRAIN_NORM_CSV)
     TEST_FILE = str(TEST_NORM_CSV)
@@ -2090,7 +2144,7 @@ if __name__ == '__main__':
     # ════════════════════════════════════════════
     # 列排列方案选择
     #   'v1' : 矩阵=元素周期表顺序 + 序列=电极电势序列（原始方案，默认）
-    #   'v2' : 矩阵=地化亲缘分组   + 序列=不相容性从高到低（新方案）
+    #   'v2' : 矩阵=地化亲缘分组   + 序列=不相容性从高到低（历史消融方案）
     # ════════════════════════════════════════════
     COLUMN_ORDER_SCHEME = 'v1'
 
@@ -2104,18 +2158,18 @@ if __name__ == '__main__':
     # ════════════════════════════════════════════
     # 实验选择
     # ════════════════════════════════════════════
-    EXPERIMENTS_TO_RUN = [
-        'Full',    # 新主模型: ViT-Transformer 双流（无 CNN）
-        'Abl-1',   # 消融【新增】: 仅 ViT 矩阵分支
-        'Abl-2',   # 消融: 仅 Transformer 序列分支
-        'Abl-3',   # 消融: 双流 w/o Positional Encoding
-        'Cmp-1',   # 对比: CNN-BiLSTM (EMSPN 前作)
-        'Cmp-2',   # 对比: CNN-ViT-Transformer (旧 Full，证 CNN 冗余)
-        'Cmp-3',   # 对比: CNN Only
-    ]
     # EXPERIMENTS_TO_RUN = [
-    #     'Full'    # 新主模型: ViT-Transformer 双流（无 CNN）
+    #     'Full',    # 新主模型: ViT-Transformer 双流（无 CNN）
+    #     'Abl-1',   # 消融【新增】: 仅 ViT 矩阵分支
+    #     'Abl-2',   # 消融: 仅 Transformer 序列分支
+    #     'Abl-3',   # 消融: 双流 w/o Positional Encoding
+    #     'Cmp-1',   # 对比: CNN-BiLSTM (EMSPN 前作)
+    #     'Cmp-2',   # 对比: CNN-ViT-Transformer (旧 Full，证 CNN 冗余)
+    #     'Cmp-3',   # 对比: CNN Only
     # ]
+    EXPERIMENTS_TO_RUN = [
+        'Full'    # 新主模型: ViT-Transformer 双流（无 CNN）
+    ]
 
     os.makedirs(output_dir, exist_ok=True)
 

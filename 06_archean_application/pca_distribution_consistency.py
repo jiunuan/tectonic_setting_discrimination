@@ -11,6 +11,7 @@ CFB=6920、缺失编码GeoDAN最终方案的现代训练集与太古代应用集
 
 from __future__ import annotations
 
+import sys
 import warnings
 from pathlib import Path
 
@@ -25,28 +26,25 @@ from matplotlib.patches import Ellipse
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 
-# === 统一路径配置：所有数据路径来自 config/paths.py ===
-import sys as _cfg_sys
-_cfg_sys.path.insert(0, str(Path(__file__).resolve().parent))
-_cfg_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config.paths import (
-    TRAIN_MAJOR_NORM_CSV, ARCHEAN_POOL_CSV,
-    ARCHEAN_FINAL_PREDICTIONS_CSV, ARCHEAN_CONSISTENCY_DIR,
+    TRAIN_MAJOR_NORM_CSV,
+    ARCHEAN_POOL_CSV,
+    ARCHEAN_FINAL_PREDICTIONS_CSV,
+    ZENODO_ARCHEAN_CSV,
+    ZENODO_ARCHEAN_PREDICTIONS_CSV,
+    ARCHEAN_CONSISTENCY_DIR,
 )
 
 from archean_s3_preprocess import preprocess_archean
 
-
-# =========================
-# 路径（输出文件名在各自 save 处用 OUT_ROOT / "文件名" 构造）
-# =========================
-RAW_MODERN_PATH = Path(str(TRAIN_MAJOR_NORM_CSV))
-ARCHEAN_RAW_PATH = Path(str(ARCHEAN_POOL_CSV))
-FINAL_PREDICTION_PATH = Path(str(ARCHEAN_FINAL_PREDICTIONS_CSV))
-OUT_ROOT = Path(str(ARCHEAN_CONSISTENCY_DIR))
+# 中文注释：当前项目通过集中配置选择正式数据或等价的 Zenodo 发布表。
+RAW_MODERN_PATH = Path(TRAIN_MAJOR_NORM_CSV)
+ARCHEAN_RAW_PATH = Path(ZENODO_ARCHEAN_CSV if Path(ZENODO_ARCHEAN_CSV).exists() else ARCHEAN_POOL_CSV)
+FINAL_PREDICTION_PATH = Path(ZENODO_ARCHEAN_PREDICTIONS_CSV if Path(ZENODO_ARCHEAN_PREDICTIONS_CSV).exists() else ARCHEAN_FINAL_PREDICTIONS_CSV)
+OUT_ROOT = Path(ARCHEAN_CONSISTENCY_DIR)
 
 CFB_TARGET_COUNT = 6920
-
 
 # =========================
 # 元素 / 标签 / 常量
@@ -80,7 +78,7 @@ ENV_VIS_SCALE = 0.75
 # (a) PCA reference space
 C_MODERN_FILL = "#A7B2BA"   # 现代参考点云中浅灰（够深才看得清）
 C_ARCHEAN = "#4A6C88"       # 太古代钢蓝（比原灰蓝更明显）
-C_HIGH_ARC = "#DA3327"      # 高弧亲和性正红
+C_HIGH_ARC = "#D84A3A"      # 高弧亲和性使用低饱和朱红，突出但不刺眼
 C_ENV_95 = "#36586A"        # 95% envelope 深岩蓝
 C_ENV_99 = "#5C7E90"        # 99% envelope 稍浅岩蓝
 # (b) applicability-domain distance
@@ -88,17 +86,17 @@ C_MODERN_OUTLINE = "#4C555C"  # 现代参考距离 step 轮廓
 # 中文注释：三段按「距现代域越来越远」做感知有序渐变 蓝(域内)→琥珀(边缘)→红(越界)。
 C_IN_DOMAIN = "#3F7CA3"     # ≤95% 域内 蓝
 C_MARGINAL = "#E2A33C"      # 95–99% 边缘 琥珀
-C_OUT_DOMAIN = "#B5483E"    # >99% 越界 砖红
+C_OUT_DOMAIN = "#B45A50"    # >99% 越界使用更暗的砖红/棕红
 C_THRESH = "#30343A"        # 阈值竖线
 # (c) quantitative coverage
 C_CONNECT = "#B8C0C7"       # dumbbell 连线
 C_COV95 = "#31566B"         # ≤95% 覆盖率深蓝灰圆点
 C_COV99 = "#A9BFCC"         # ≤99% 覆盖率浅蓝灰方块
 C_COV99_EDGE = "#5F7888"    # ≤99% 方块描边
-C_NLABEL = "#6F7780"        # 样品数标签灰
+C_NLABEL = "#5F666D"        # 样品数标签深灰色
 # 通用
-C_TEXT = "#222222"          # 图内注释主色
-C_SPINE = "#9AA0A5"         # 浅深灰边框
+C_TEXT = "#000000"          # 图内注释主色：黑色
+C_SPINE = "#000000"         # 坐标轴边框：黑色
 C_GRID = "#E9ECEF"          # 极浅网格线
 
 CLASS_ABBREVS = {
@@ -107,14 +105,16 @@ CLASS_ABBREVS = {
     "OCEAN ISLAND": "OI", "CONTINENTAL FLOOD BASALT": "CFB", "CONTINENTAL_RIFT": "CR",
 }
 
+# 中文注释：整体标注、刻度、轴标签和图例字号较原版上调 2 pt。
 plt.rcParams.update({
     "font.family": "sans-serif",
     "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
-    "font.size": 11,
-    "axes.linewidth": 0.9, "axes.labelsize": 12, "axes.titlesize": 12,
-    "axes.edgecolor": "#444A4F",
-    "xtick.labelsize": 10, "ytick.labelsize": 10, "legend.fontsize": 9,
-    "xtick.color": "#444A4F", "ytick.color": "#444A4F",
+    "font.size": 13,
+    "axes.linewidth": 0.9, "axes.labelsize": 14, "axes.titlesize": 14,
+    "axes.edgecolor": "#000000",
+    "xtick.labelsize": 12, "ytick.labelsize": 12, "legend.fontsize": 11,
+    "xtick.color": "#000000", "ytick.color": "#000000",
+    "axes.labelcolor": "#000000", "text.color": "#000000",
     "figure.dpi": 100, "savefig.dpi": 600, "savefig.bbox": "tight",
 })
 
@@ -196,11 +196,11 @@ def compute_ad_distances(PC_train_full: np.ndarray, PC_arch_full: np.ndarray,
 def coverage_rows(dist_arch: np.ndarray, q95: float, q99: float,
                   high_mask: np.ndarray | None, low_mask: np.ndarray | None) -> list[dict]:
     """三组太古代样品（全部 / 高弧亲和 / 低弧亲和）在现代 95% / 99% 域内的覆盖率。"""
-    groups = [("All Archean basalts", np.ones(len(dist_arch), dtype=bool))]
+    groups = [("All", np.ones(len(dist_arch), dtype=bool))]
     if high_mask is not None:
-        groups.append((f"High arc-affinity\n(P$_{{arc}}$ ≥ {HIGH_CONF_THRESHOLD:.2f})", high_mask))
+        groups.append(("High arc", high_mask))
     if low_mask is not None:
-        groups.append((f"Low arc-affinity\n(P$_{{arc}}$ < {LOW_CONF_THRESHOLD:.2f})", low_mask))
+        groups.append(("Low arc", low_mask))
     rows = []
     for label, m in groups:
         d = dist_arch[m]
@@ -240,17 +240,18 @@ def _panel_tag(ax, tag: str, x_pts: float = -52, y_pts: float = -12) -> None:
     """
     ax.annotate(tag, xy=(0, 1), xycoords="axes fraction",
                 xytext=(x_pts, y_pts), textcoords="offset points",
-                ha="left", va="bottom", fontsize=14, fontweight="bold", color=C_TEXT)
+                ha="left", va="bottom", fontsize=20, fontweight="bold", color=C_TEXT)
 
 
 def _style_axes(ax) -> None:
-    """统一去掉上、右边框，左/下边框用浅深灰细线，刻度低调。"""
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    for s in ("left", "bottom"):
-        ax.spines[s].set_color(C_SPINE)
-        ax.spines[s].set_linewidth(0.8)
-    ax.tick_params(length=3, width=0.7, color=C_SPINE, labelcolor="#3A4045")
+    """统一显示四条边界线，边框和刻度使用同一套浅深灰。"""
+    # 中文注释：PCA 主图的每个子图都保留上、下、左、右四条边界线，避免不同面板边框风格不一致。
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_color(C_SPINE)
+        spine.set_linewidth(0.5)
+        spine.set_capstyle("butt")
+    ax.tick_params(length=3, width=0.7, color=C_SPINE, labelcolor="#000000")
 
 
 def _panel_a_map(ax, PC_train, PC_arch, high_mask, ad, var1, var2):
@@ -310,11 +311,11 @@ def _panel_a_map(ax, PC_train, PC_arch, high_mask, ad, var1, var2):
     if high_mask is None:
         handles = [h for h in handles if h.get_label() != "High arc-affinity"]
     leg = ax.legend(handles=handles, loc="upper right", frameon=True, framealpha=0.95,
-                    edgecolor="#D0D4D8", fontsize=8.5, handletextpad=0.5,
+                    edgecolor="#D0D4D8", fontsize=11, handletextpad=0.5,
                     borderpad=0.6, labelspacing=0.45)
     leg.get_frame().set_linewidth(0.6)
     leg.set_zorder(20)  # 中文注释：图例置于所有散点之上，避免被高 zorder 的橙色点遮挡。
-    _panel_tag(ax, "(a)")
+    _panel_tag(ax, "a")
 
 
 def _panel_b_distance(ax, ad):
@@ -342,9 +343,9 @@ def _panel_b_distance(ax, ad):
     ax.axvline(q95, color=C_THRESH, lw=1.05, ls="-", zorder=5)
     ax.axvline(q99, color=C_THRESH, lw=1.05, ls=(0, (4, 3)), zorder=5)
     ax.text(q95, ymax * 0.97, "95%", rotation=90, va="top", ha="right",
-            fontsize=9, color=C_THRESH)
+            fontsize=12, color=C_THRESH)
     ax.text(q99, ymax * 0.97, "99%", rotation=90, va="top", ha="right",
-            fontsize=9, color=C_THRESH)
+            fontsize=12, color=C_THRESH)
 
     handles = [
         Line2D([0], [0], color=C_MODERN_OUTLINE, lw=1.0, label="Modern reference"),
@@ -353,7 +354,7 @@ def _panel_b_distance(ax, ad):
         mpl.patches.Patch(facecolor=C_OUT_DOMAIN, edgecolor="none", label=">99%"),
     ]
     leg = ax.legend(handles=handles, loc="upper right", frameon=True, framealpha=0.85,
-                    edgecolor="#D8DCDF", fontsize=8, handlelength=1.1,
+                    edgecolor="#D8DCDF", fontsize=10, handlelength=1.1,
                     handletextpad=0.5, labelspacing=0.3, borderpad=0.5)
     leg.get_frame().set_linewidth(0.5)
 
@@ -364,7 +365,7 @@ def _panel_b_distance(ax, ad):
     ax.grid(True, axis="y", color=C_GRID, lw=0.6, alpha=0.7, zorder=0)
     ax.set_axisbelow(True)
     _style_axes(ax)
-    _panel_tag(ax, "(b)")
+    _panel_tag(ax, "b")
 
 
 def _panel_c_coverage(ax, cov_rows):
@@ -378,15 +379,15 @@ def _panel_c_coverage(ax, cov_rows):
         ax.scatter(r["cov99"], y, s=64, marker="s", color=C_COV99, zorder=3,
                    edgecolors=C_COV99_EDGE, linewidths=0.6)
         lo, hi = sorted([r["cov95"], r["cov99"]])
-        ax.text(lo - 1.3, y, f"{lo:.1f}", va="center", ha="right", fontsize=9, color=C_TEXT)
-        ax.text(hi + 1.3, y, f"{hi:.1f}", va="center", ha="left", fontsize=9, color=C_TEXT)
+        ax.text(lo - 1.3, y, f"{lo:.1f}", va="center", ha="right", fontsize=12, color=C_TEXT)
+        ax.text(hi + 1.3, y, f"{hi:.1f}", va="center", ha="left", fontsize=12, color=C_TEXT)
 
     ax.set_yticks(ys)
-    ax.set_yticklabels([r["group"] for r in cov_rows], fontsize=9)
-    # 中文注释：样品数放在每组左侧、对应行下方，避免挤在图中间。
+    ax.set_yticklabels([r["group"] for r in cov_rows], fontsize=12)
+    # 中文注释：样品数放在类别 ytick 标签下方，使用更小字号和浅灰色弱化层级。
     for y, r in zip(ys, cov_rows):
-        ax.text(0.015, y - 0.24, f"n={r['n']:,}", transform=ax.get_yaxis_transform(),
-                ha="left", va="top", fontsize=8.5, color=C_NLABEL)
+        ax.text(-0.035, y - 0.22, f"n={r['n']:,}", transform=ax.get_yaxis_transform(),
+                ha="right", va="top", fontsize=10, color=C_NLABEL)
 
     all_vals = [v for r in cov_rows for v in (r["cov95"], r["cov99"])]
     # 中文注释：覆盖率点及其左右数值标签都必须位于坐标范围内，动态预留边距。
@@ -394,7 +395,8 @@ def _panel_c_coverage(ax, cov_rows):
     x_min = max(0.0, np.floor((min(all_vals) - x_margin) / 5.0) * 5.0)
     x_max = min(105.0, np.ceil((max(all_vals) + x_margin) / 5.0) * 5.0)
     ax.set_xlim(x_min, x_max)
-    ax.set_ylim(-0.6, n - 0.05)
+    # 中文注释：减小 y 轴上边界，让三条 coverage 线和 ytick 标签整体视觉上移。
+    ax.set_ylim(-0.60, n - 0.25)
     ax.set_xlabel("Coverage within modern domain (%)")
     # ax.set_title("Quantitative coverage", fontsize=11, pad=6, color=C_TEXT)
     ax.grid(True, axis="x", color=C_GRID, lw=0.6, alpha=0.7, zorder=0)
@@ -409,16 +411,17 @@ def _panel_c_coverage(ax, cov_rows):
     ]
     leg = ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 1.0),
                     ncol=2, frameon=True, framealpha=0.9, edgecolor="#D8DCDF",
-                    fontsize=9, handletextpad=0.4, columnspacing=1.4, borderpad=0.5)
-    leg.get_frame().set_linewidth(0.5)
-    _panel_tag(ax, "(c)")
-
+                    fontsize=12, handletextpad=0.4, columnspacing=1.4, borderpad=0.5)
+    leg.get_frame().set_linewidth(0.6)
+    _panel_tag(ax, "c")
 
 def plot_applicability_domain(PC_train, PC_arch, high_mask, ad, cov_rows,
                               var1, var2, paths):
     """Applicability-domain / PCA coverage 三联图：左 (a) 大，右上 (b)、右下 (c)。"""
-    fig = plt.figure(figsize=(12.5, 6.8))
-    gs = fig.add_gridspec(2, 2, width_ratios=[2.0, 1.1], height_ratios=[1.0, 1.0],
+    fig = plt.figure(figsize=(13.2, 6.8))
+    gs = fig.add_gridspec(2, 2, width_ratios=[2.0, 1.1], height_ratios=[0.92, 1.08],
+                          # 中文注释：右下 c 图略高一点，缓解底部文字和坐标轴的拥挤。
+                          # 中文注释：四边框后右列标签更显眼，适当拉开 a 与 b/c 的横向间距。
                           wspace=0.22, hspace=0.38)
     ax_a = fig.add_subplot(gs[:, 0])
     ax_b = fig.add_subplot(gs[0, 1])
@@ -469,7 +472,7 @@ def plot_per_class(PC_train, PC_arch, labels, classes, colors, high_mask,
             ax.scatter(PC_arch[:, 0], PC_arch[:, 1], c="crimson",
                        s=14, alpha=0.7, edgecolors="black", linewidths=0.3, zorder=4)
 
-        ax.set_title(f"{abbr(cls)}\nmodern n = {m.sum():,}", fontsize=10)
+        ax.set_title(f"{abbr(cls)}\nmodern n = {m.sum():,}", fontsize=12)
         ax.set_xlim(xlim); ax.set_ylim(ylim)
         ax.axhline(0, color="grey", lw=0.4, ls="--", alpha=0.4)
         ax.axvline(0, color="grey", lw=0.4, ls="--", alpha=0.4)
@@ -499,8 +502,8 @@ def plot_per_class(PC_train, PC_arch, labels, classes, colors, high_mask,
                              markeredgecolor="black", markersize=7, label="Archean samples"))
 
     fig.legend(handles=legend, loc="lower center", ncol=3,
-               bbox_to_anchor=(0.5, -0.02), frameon=True, fontsize=9)
-    fig.suptitle(f"Per-class PCA panels - {variant}", fontsize=11, y=1.00)
+               bbox_to_anchor=(0.5, -0.02), frameon=True, fontsize=12)
+    fig.suptitle(f"Per-class PCA panels - {variant}", fontsize=13, y=1.00)
     plt.tight_layout(rect=(0, 0.02, 1, 0.98))
     fig.savefig(path, dpi=300)
     plt.close(fig)
