@@ -15,6 +15,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.legend_handler import HandlerTuple
 import numpy as np
 import pandas as pd
+import re
 from scipy.stats import gaussian_kde
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -36,6 +36,14 @@ ZENODO_MODERN_CSV = ZENODO_DATASET_DIR / "modern_basalt_geochemistry.csv"
 ZENODO_ARCHEAN_CSV = ZENODO_DATASET_DIR / "archean_basalt_geochemistry.csv"
 ZENODO_ARCHEAN_PREDICTIONS_CSV = ZENODO_DATASET_DIR / "archean_basalt_geodan_predictions.csv"
 
+
+def _first_existing_path(candidates):
+    """中文注释：优先使用标准文件名，同时兼容历史版本留下的文件名。"""
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
 # 各阶段目录（与 README 流程图编号一致）
 RAW_DIR        = DATA_DIR / "00_raw"            # 原始数据
 CM_RECLASS_DIR = DATA_DIR / "01_cm_reclass_input"  # 汇聚边缘细分产出（输入起点）
@@ -51,8 +59,18 @@ ARCHEAN_DIR    = DATA_DIR / "archean"           # 太古代应用数据 + 案例
 # 00_raw —— 原始数据文件
 # ════════════════════════════════════════════════════════════════
 GEOROC_RAW_CSV        = RAW_DIR / "georoc" / "basalt_2025.csv"
-PETDB_RAW_CSV         = RAW_DIR / "petdb" / "petdbv2_merged.csv"          # PetDB 2.0 合并原始表
-GEOROC_REFERENCES_CSV = RAW_DIR / "georoc" / "references_structured.csv"  # GEOROC 参考文献编号→年份映射
+PETDB_RAW_CSV = _first_existing_path(
+    [
+        RAW_DIR / "petdb" / "petdbv2_merged.csv",
+        RAW_DIR / "petdb" / "petDB_recent_downloads_merged.csv",
+    ]
+)  # PetDB 2.0 合并原始表
+GEOROC_REFERENCES_CSV = _first_existing_path(
+    [
+        RAW_DIR / "georoc" / "references_structured.csv",
+        CM_RECLASS_DIR / "references_structured.csv",
+    ]
+)  # GEOROC 参考文献编号→年份映射
 
 # ════════════════════════════════════════════════════════════════
 # 01_cm_reclass_input —— 汇聚边缘细分项目（convergent_margin_reclass）的产出
@@ -65,13 +83,28 @@ REFINED_EXPANDED_CSV = CM_RECLASS_DIR / "basalt_refined_expanded.csv"  # 用细�
 # ════════════════════════════════════════════════════════════════
 # 02_filtered —— 经筛选规则后的数据
 # ════════════════════════════════════════════════════════════════
-GEOROC_FILTERED_CSV = FILTERED_DIR / "basalt_refined_expanded_filtered.csv"
-PETDB_FILTERED_CSV  = FILTERED_DIR / "petDB.csv"
+GEOROC_FILTERED_CSV = _first_existing_path(
+    [
+        FILTERED_DIR / "basalt_refined_expanded_filtered.csv",
+        FILTERED_DIR / "basalt_refined_expanded_whole_rock_filtered.csv",
+    ]
+)
+PETDB_FILTERED_CSV = _first_existing_path(
+    [
+        FILTERED_DIR / "petDB.csv",
+        FILTERED_DIR / "petdbv2_merged_filtered.csv",
+    ]
+)
 
 # ════════════════════════════════════════════════════════════════
 # 03_combined —— GEOROC + PetDB 合并
 # ════════════════════════════════════════════════════════════════
-COMBINED_CSV = COMBINED_DIR / "01_basalt_number_year.csv"
+COMBINED_CSV = _first_existing_path(
+    [
+        COMBINED_DIR / "01_basalt_number_year.csv",
+        COMBINED_DIR / "01_basalt_number_year_wr.csv",
+    ]
+)
 
 # ════════════════════════════════════════════════════════════════
 # 04_split —— 训练/测试切分
@@ -126,7 +159,13 @@ ARCHEAN_OUTPUT_DIR  = ARCHEAN_DIR / "outputs"        # 太古代预处理 / 预�
 # 扩展太古代应用集（Liu SiO2≤54 放宽 + GeoROC 恢复的 ARCHEAN 样品）
 ARCHEAN_POOL_DIR        = ARCHEAN_OUTPUT_DIR / "extended_archean_pool"
 ARCHEAN_POOL_RAW_CSV    = ARCHEAN_POOL_DIR / "expanded_archean_raw.csv"
-ARCHEAN_POOL_CSV        = ARCHEAN_POOL_DIR / "expanded_archean_basalt_age_nonmissing.csv"  # 候选池 3,483 条(SiO2≤54)；按 SiO2≤53 筛得正式应用集 3,012 条
+ARCHEAN_POOL_CSV = _first_existing_path(
+    [
+        ARCHEAN_POOL_DIR / "expanded_archean_basalt_age_nonmissing.csv",
+        ARCHEAN_DATA_SUBDIR / "expanded_archean_basalt_age_nonmissing.csv",
+        ZENODO_ARCHEAN_CSV,
+    ]
+)  # 候选池 3,483 条(SiO2≤54)；按 SiO2≤53 筛得正式应用集 3,012 条
 ARCHEAN_POOL_MASK_CSV   = ARCHEAN_POOL_DIR / "expanded_archean_missing_mask.csv"
 
 # 正式缺失编码预测输出（GeoDAN final）

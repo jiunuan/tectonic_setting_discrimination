@@ -69,21 +69,27 @@ from config.paths import SHAP_FIGURE7_PANEL_DIR
 # ══════════════════════════════════════════════════════════════
 # ①  默认运行配置（取消 argparse，直接修改这里的变量即可）
 # ══════════════════════════════════════════════════════════════
-N_EXPLAIN_PER_CLASS = 300   # 未单独指定类别的抽样上限；样本不足时全取
+N_EXPLAIN_PER_CLASS = int(
+    os.environ.get("SHAP_N_EXPLAIN_PER_CLASS", "300")
+)   # 未单独指定类别的抽样上限；样本不足时全取
 # 中文注释：只降低四个样本量较大/对 Ba 较敏感类别的解释样本数，不按 Ba 数值筛样本。
+_SHAP_CLASS_LIMIT = int(os.environ.get("SHAP_CLASS_LIMIT", "200"))
 EXPLAIN_CLASS_LIMITS = {
-    'CF': 200,
-    'CR': 200,
-    'OI': 200,
-    'MOR': 200,
+    'CF': _SHAP_CLASS_LIMIT,
+    'CR': _SHAP_CLASS_LIMIT,
+    'OI': _SHAP_CLASS_LIMIT,
+    'MOR': _SHAP_CLASS_LIMIT,
 }
 EXPLAIN_FEATURE_QUANTILE_FILTERS = {}
-N_BACKGROUND = 1000
-BATCH_SIZE = 50
+N_BACKGROUND = int(os.environ.get("SHAP_N_BACKGROUND", "1000"))
+BATCH_SIZE = int(os.environ.get("SHAP_BATCH_SIZE", "50"))
 RANDOM_SEED = 42
 MODEL_WEIGHT_PATH = MODEL_PATH
-OUTPUT_PANEL_DIR = str(SHAP_FIGURE7_PANEL_DIR)
-DRAW_BEESWARM = True
+OUTPUT_PANEL_DIR = os.environ.get(
+    "SHAP_OUTPUT_DIR",
+    str(SHAP_FIGURE7_PANEL_DIR),
+)
+DRAW_BEESWARM = os.environ.get("SHAP_DRAW_BEESWARM", "1") != "0"
 
 # 中文注释：如果缓存来自不同抽样策略，不要复用；正式无 Ba 区间筛选时建议重新计算。
 USE_CACHED_SHAP = False

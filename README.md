@@ -110,9 +110,9 @@ Python 3.10 or later is recommended.
 git clone https://github.com/jiunuan/tectnoic_setting_discrimination.git
 cd tectnoic_setting_discrimination
 
-# Create and activate a virtual environment with either conda or venv
-conda create -n basalt python=3.10 -y
-conda activate basalt
+# Create and activate a virtual environment with either conda or venv.
+# The project has been verified with the existing babeldoc environment.
+conda activate babeldoc
 
 # Install the dependencies
 pip install -r requirements.txt
@@ -122,6 +122,11 @@ pip install -r requirements.txt
 > enable GPU training, use the installation command at
 > [pytorch.org](https://pytorch.org) that matches your local CUDA version. A GPU
 > is recommended for model training.
+
+> **Windows environment:** Run the workflow with the Python interpreter from the
+> activated environment (`where python` should point to `...\envs\babeldoc\python.exe`).
+> The system Anaconda base interpreter may fail to load PyTorch DLLs even when
+> the package is installed.
 
 Download the datasets from
 [Zenodo (DOI: 10.5281/zenodo.20736587)](https://doi.org/10.5281/zenodo.20736587)
@@ -179,6 +184,33 @@ python 06_archean_application/archean_case_studies_map_ridgeline.py
 # 7. Data-distribution figures
 python 07_figures/selected_element_boxplots.py
 python 07_figures/distribution_elevation.py  # Optional: requires a user-provided world basemap
+```
+
+The imputation script reuses an existing result only when the cached training
+and test labels match the current split. Set
+`BASALT_REUSE_IMPUTATION_CACHE=0` to force a complete MissForest refit.
+
+By default, `split_train_test.py` uses the published Zenodo modern-basalt table.
+To explicitly chain the newly generated GEOROC+PetDB table from steps 1–3,
+set `BASALT_USE_COMBINED=1` before running the split script.
+
+The model script keeps the paper configuration (`200` epochs and seeds
+`42,123`) by default. For a short installation smoke test, isolate the outputs
+and run one epoch:
+
+```bash
+GEODAN_EPOCHS=1 GEODAN_SEEDS=42 \
+GEODAN_OUTPUT_DIR=data/models/smoke_test \
+python 04_model/ablation_v4_vit_transformer.py
+```
+
+For a SHAP dependency smoke test, use a separate output directory and a very
+small sample:
+
+```bash
+SHAP_N_EXPLAIN_PER_CLASS=2 SHAP_CLASS_LIMIT=2 SHAP_N_BACKGROUND=10 \
+SHAP_DRAW_BEESWARM=0 SHAP_OUTPUT_DIR=data/models/shap_smoke \
+python 05_interpretation/plot_shap_summary.py
 ```
 
 ### Five-Fold Cross-Validation

@@ -12,6 +12,7 @@
 ==========================================================================
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -59,7 +60,9 @@ RF_PARAMS = {
     'min_samples_leaf': 1,
     'max_features': 0.8,
     'bootstrap': True,
-    'n_jobs': -1,
+    # 中文注释：默认单进程，避免Windows受限环境创建并行进程时触发WinError 5。
+    # 如需提速，可设置 BASALT_RF_N_JOBS 环境变量，例如 4。
+    'n_jobs': max(1, int(os.environ.get('BASALT_RF_N_JOBS', '1'))),
     'random_state': 42,
 }
 
@@ -427,6 +430,47 @@ def save_archean_mask_only() -> Optional[pd.DataFrame]:
     return mask
 
 
+def cached_modern_outputs_are_valid() -> bool:
+    """中文注释：已有结果与当前切分集一致时，避免重复训练36个随机森林。"""
+    if os.environ.get("BASALT_REUSE_IMPUTATION_CACHE", "1") == "0":
+        return False
+
+    output_paths = [
+        Path(TRAIN_OUTPUT_CSV),
+        Path(TEST_OUTPUT_CSV),
+        Path(TRAIN_MISSING_MASK_CSV),
+        Path(TEST_MISSING_MASK_CSV),
+    ]
+    if not all(path.exists() for path in output_paths):
+        return False
+
+    try:
+        for input_path, output_path in [
+            (TRAIN_INPUT_CSV, TRAIN_OUTPUT_CSV),
+            (TEST_INPUT_CSV, TEST_OUTPUT_CSV),
+        ]:
+            source = pd.read_csv(input_path, low_memory=False)
+            cached = pd.read_csv(output_path, low_memory=False)
+            if len(source) != len(cached):
+                return False
+
+            if not set(CHEMICAL_COLUMNS).issubset(cached.columns):
+                return False
+            metadata_columns = [
+                column for column in source.columns
+                if column not in CHEMICAL_COLUMNS
+            ]
+            if not set(metadata_columns).issubset(cached.columns):
+                return False
+            source_metadata = source[metadata_columns].fillna("<NA>").astype(str)
+            cached_metadata = cached[metadata_columns].fillna("<NA>").astype(str)
+            if not source_metadata.equals(cached_metadata):
+                return False
+        return True
+    except (OSError, ValueError, KeyError, pd.errors.ParserError):
+        return False
+
+
 if __name__ == '__main__':
     print('=' * 70)
     print('玄武岩地球化学缺失值全局插补：训练集 fit -> 测试集 transform')
@@ -434,9 +478,12 @@ if __name__ == '__main__':
     print('太古代应用集固定不插补，只生成缺失mask')
     print('=' * 70)
 
-    model = fit_global_model()
-    impute_trainset(model)
-    impute_testset(model)
+    if cached_modern_outputs_are_valid():
+        print('[缓存] 训练集/测试集插补结果与当前切分集一致，跳过重复拟合。')
+    else:
+        model = fit_global_model()
+        impute_trainset(model)
+        impute_testset(model)
     save_archean_mask_only()
 
     print('[完成] 现代训练/测试集插补与太古代缺失mask生成完成')

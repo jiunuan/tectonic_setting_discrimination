@@ -10,13 +10,26 @@ from typing import Any
 
 import pandas as pd
 
+import sys
 
-# 中文注释：默认路径均为仓库内的相对路径，脚本不依赖网络或 API。
-DEFAULT_INPUT = Path(
-    "data/archean/outputs/archean_geodan_final/expanded_archean_predictions.csv"
+# 中文注释：统一读取项目配置，兼容本地输出、Zenodo 精简发布和旧版目录。
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT))
+from config.paths import (
+    ARCHEAN_FINAL_PREDICTIONS_CSV,
+    ZENODO_ARCHEAN_PREDICTIONS_CSV,
 )
-DEFAULT_OUTPUT = Path(
-    "data/archean/outputs/archean_geodan_final/expanded_archean_predictions_standardized.csv"
+
+
+# 中文注释：优先使用本地正式预测结果；缺失时读取Zenodo已发布的3012条预测表。
+DEFAULT_INPUT = (
+    Path(ARCHEAN_FINAL_PREDICTIONS_CSV)
+    if Path(ARCHEAN_FINAL_PREDICTIONS_CSV).exists()
+    else Path(ZENODO_ARCHEAN_PREDICTIONS_CSV)
+)
+DEFAULT_OUTPUT = PROJECT_ROOT / (
+    "data/archean/outputs/archean_geodan_final/"
+    "expanded_archean_predictions_standardized.csv"
 )
 
 # 中文注释：这里只收录已人工核验的确定性归并关系，未列出的名称保持原值。

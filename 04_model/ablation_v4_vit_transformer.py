@@ -2132,11 +2132,15 @@ if __name__ == '__main__':
     # 中文注释：正文最终方案固定为显式缺失编码，并保留原始6920条CFB训练样品。
     USE_MISSING_MASK = True
     CFB_TARGET_COUNT = None
-    output_dir = str(MODELS_DIR)
+    # 中文注释：默认写入项目模型目录；冒烟测试或批处理可通过环境变量隔离输出。
+    output_dir = os.environ.get("GEODAN_OUTPUT_DIR", str(MODELS_DIR))
 
-    # 中文注释：训练轮数和随机种子直接在代码中配置，不再读取环境变量。
-    EPOCHS = 200
-    SEEDS = [42, 123]
+    # 中文注释：保留论文默认配置，同时允许用环境变量执行短时冒烟测试。
+    EPOCHS = int(os.environ.get("GEODAN_EPOCHS", "200"))
+    seed_text = os.environ.get("GEODAN_SEEDS", "42,123")
+    SEEDS = [int(item.strip()) for item in seed_text.split(",") if item.strip()]
+    if not SEEDS:
+        raise ValueError("GEODAN_SEEDS 不能为空，例如 GEODAN_SEEDS=42,123")
     MIXUP_ALPHA      = 0
     # 中文注释：本轮只运行“原始空间全局插补 + CR及四个少数类SMOTE到3000 + 普通交叉熵”。
     RUN_ML_BASELINES = False

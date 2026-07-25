@@ -13,12 +13,17 @@ from config.paths import COMBINED_CSV, ZENODO_MODERN_CSV, SPLIT_DIR
 # 默认配置
 # 直接修改这里即可，不需要命令行参数
 # =========================
-# 优先读取公开发布的现代玄武岩合并表；没有时兼容旧的中间结果路径。
-DEFAULT_INPUT_PATH = (
-    ZENODO_MODERN_CSV
-    if ZENODO_MODERN_CSV.exists()
-    else COMBINED_CSV
-)
+# 中文注释：默认读取Zenodo精简发布表，保证从训练/测试切分开始即可复现。
+# 若要把本次运行的GEOROC+PetDB合并结果接入下游，设置 BASALT_USE_COMBINED=1。
+USE_REBUILT_COMBINED = os.environ.get("BASALT_USE_COMBINED", "0") == "1"
+if USE_REBUILT_COMBINED and COMBINED_CSV.exists():
+    DEFAULT_INPUT_PATH = COMBINED_CSV
+else:
+    DEFAULT_INPUT_PATH = (
+        ZENODO_MODERN_CSV
+        if ZENODO_MODERN_CSV.exists()
+        else COMBINED_CSV
+    )
 INPUT_FILE = str(DEFAULT_INPUT_PATH)
 OUTPUT_DIR = str(SPLIT_DIR)
 LABEL_COLUMN = "TECTONIC SETTING"
@@ -83,7 +88,9 @@ def main():
 
     # 如果启用分层切分，则使用标签列保持类别比例稳定
     stratify_labels = df[LABEL_COLUMN] if USE_STRATIFY else None
-    base_name = os.path.splitext(os.path.basename(INPUT_FILE))[0]
+    # 中文注释：无论输入来自 Zenodo 公开表还是旧的合并表，
+    # 输出名称都固定为下游插补脚本约定的 01_basalt_number_year_*。
+    base_name = "01_basalt_number_year"
 
     # 如果设置了验证集比例，则先切出 train 和 temp，再把 temp 切成 val/test
     if VAL_SIZE > 0:

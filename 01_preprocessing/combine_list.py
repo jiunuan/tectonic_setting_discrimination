@@ -35,6 +35,11 @@ for file in file_paths:
         print(f"Failed to read {file} with all tried encodings.")
 
 # 合并所有 DataFrame
+if not df_list:
+    raise FileNotFoundError(
+        "未找到可合并的筛选结果。请先运行 extract_georoc.py 和 extract_petdb.py，"
+        "或检查 data/02_filtered 下的筛选文件名。"
+    )
 combined_df = pd.concat(df_list, ignore_index=True)
 
 # 保存合并后的 DataFrame

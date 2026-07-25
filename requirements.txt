@@ -12,6 +12,7 @@ scipy
 
 # ── 机器学习 ──
 scikit-learn
+imbalanced-learn
 joblib                    # 模型 / 参数序列化
 xgboost                   # ML 基线对比
 
