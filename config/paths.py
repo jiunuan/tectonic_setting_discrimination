@@ -18,6 +18,7 @@
   统一到本模块的 ``06_normalized`` / ``05_normalize_*`` 基准。
 """
 
+import os
 from pathlib import Path
 
 # ════════════════════════════════════════════════════════════════
@@ -26,7 +27,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # ── 数据根 ───────────────────────────────────────────────────────
-DATA_DIR = PROJECT_ROOT / "data"
+# 默认使用仓库内的相对 data 目录；Code Ocean 可通过环境变量把它改到可写的 scratch。
+DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.environ.get("BASALT_DATA_DIR", str(DEFAULT_DATA_DIR)))
 # Zenodo 精简发布数据集（三张公开共享表；不纳入 GitHub）。
 ZENODO_DATASET_DIR = DATA_DIR / "basalt_geochemistry_dataset"
 ZENODO_MODERN_CSV = ZENODO_DATASET_DIR / "modern_basalt_geochemistry.csv"

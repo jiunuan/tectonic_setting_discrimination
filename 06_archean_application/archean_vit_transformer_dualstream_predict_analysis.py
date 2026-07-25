@@ -5,6 +5,7 @@ from __future__ import annotations
 # ──────────────────────────────────────────────────────────────────────────────
 import sys
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -2712,6 +2713,8 @@ FINAL_MODEL_WEIGHT_PATH = Path(str(MAIN_MODEL_WEIGHT))
 FINAL_OUTPUT_DIR = Path(str(ARCHEAN_FINAL_DIR))
 FINAL_PREDICTION_PATH = Path(str(ARCHEAN_FINAL_PREDICTIONS_CSV))
 FINAL_COMPOSITE_PATH = FINAL_OUTPUT_DIR / "fig_main_composite_tectonic.png"
+# Code Ocean 精简数据资产不包含 Liu 原始表和案例区文件；开启后只生成预测表。
+PREDICTION_ONLY = os.environ.get("GEODAN_PREDICTION_ONLY", "0") == "1"
 def run_final_prediction() -> None:
     """运行固定正文方案：CFB=6920、显式缺失编码、SiO2 44-53 wt%。"""
     required_paths = [
@@ -2755,6 +2758,18 @@ def run_final_prediction() -> None:
         high_std=HIGH_STD,
     )
     prediction = add_age_bins(prediction, BIN_SIZE_MYR)
+
+    # 仅预测模式不读取 Liu 原始表，也不运行需要额外案例数据的下游分析。
+    if PREDICTION_ONLY:
+        FINAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        prediction.to_csv(
+            FINAL_PREDICTION_PATH,
+            index=False,
+            encoding="utf-8-sig",
+        )
+        print(f"仅预测模式完成，预测结果: {FINAL_PREDICTION_PATH}")
+        return
+
     age_summary = summarize_by_age(prediction, class_names)
     indicator_summary = summarize_indicators(prediction)
     liu_age_summary = summarize_liu_baseline_by_age(

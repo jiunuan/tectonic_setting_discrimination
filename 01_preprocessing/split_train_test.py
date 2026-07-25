@@ -6,14 +6,20 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from config.paths import COMBINED_CSV, SPLIT_DIR
+from config.paths import COMBINED_CSV, ZENODO_MODERN_CSV, SPLIT_DIR
 
 
 # =========================
 # 默认配置
 # 直接修改这里即可，不需要命令行参数
 # =========================
-INPUT_FILE = str(COMBINED_CSV)
+# 优先读取公开发布的现代玄武岩合并表；没有时兼容旧的中间结果路径。
+DEFAULT_INPUT_PATH = (
+    ZENODO_MODERN_CSV
+    if ZENODO_MODERN_CSV.exists()
+    else COMBINED_CSV
+)
+INPUT_FILE = str(DEFAULT_INPUT_PATH)
 OUTPUT_DIR = str(SPLIT_DIR)
 LABEL_COLUMN = "TECTONIC SETTING"
 
