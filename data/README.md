@@ -41,10 +41,14 @@ They are not part of the Zenodo release and are not required before running
 
 ## Quick start from the three Zenodo files
 
-From the repository root, activate the verified Python environment and run:
+From the repository root, create and activate the project environment, install
+the dependencies, and then run:
 
 ```bash
-conda activate babeldoc
+conda create -n basalt_tectonic python=3.10 -y
+conda activate basalt_tectonic
+pip install -r requirements.txt
+
 python 01_preprocessing/split_train_test.py
 python 02_imputation/imputation_train_predict.py
 python 03_normalization/normalize_major_elements.py

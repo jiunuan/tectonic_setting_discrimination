@@ -110,11 +110,11 @@ Python 3.10 or later is recommended.
 git clone https://github.com/jiunuan/tectnoic_setting_discrimination.git
 cd tectnoic_setting_discrimination
 
-# Create and activate a virtual environment with either conda or venv.
-# The project has been verified with the existing babeldoc environment.
-conda activate babeldoc
+# Create a new Conda environment and activate it
+conda create -n basalt_tectonic python=3.10 -y
+conda activate basalt_tectonic
 
-# Install the dependencies
+# Install the Python dependencies
 pip install -r requirements.txt
 ```
 
@@ -124,9 +124,9 @@ pip install -r requirements.txt
 > is recommended for model training.
 
 > **Windows environment:** Run the workflow with the Python interpreter from the
-> activated environment (`where python` should point to `...\envs\babeldoc\python.exe`).
-> The system Anaconda base interpreter may fail to load PyTorch DLLs even when
-> the package is installed.
+> newly activated `basalt_tectonic` environment. Verify it with
+> `where python`. The system Anaconda base interpreter may fail to load PyTorch
+> DLLs even when the package is installed.
 
 Download the datasets from
 [Zenodo (DOI: 10.5281/zenodo.20736587)](https://doi.org/10.5281/zenodo.20736587)
