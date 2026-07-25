@@ -142,12 +142,7 @@ The stage-specific scripts do not require command-line arguments. Their
 settings are defined at the top of each script and in `config/paths.py`.
 
 ```bash
-# 1. Preprocessing
-# The scripts below perform formal rule-based filtering.
-# The GUI tools under filter/ are optional utilities for tuning the rules.
-python 01_preprocessing/filter/extract_georoc.py
-python 01_preprocessing/filter/extract_petdb.py
-python 01_preprocessing/combine_list.py
+# 1. Modern training/test split from the three Zenodo files
 python 01_preprocessing/split_train_test.py
 
 # 2. Global imputation and missing-value masks
@@ -165,26 +160,40 @@ python 03_normalization/normalize.py
 # A GPU is recommended. Values and missing-value masks are used as two channels.
 python 04_model/ablation_v4_vit_transformer.py
 
-# 4.1. Optional five-fold cross-validation within the existing 80% training set
+# 4.1. Optional five-fold cross-validation
 python 04_model/kfold_vit_transformer.py
 
 # 5. SHAP interpretation using the true_class_median aggregation
 python 05_interpretation/plot_shap_summary.py
 python 05_interpretation/plot_shap_ac_from_saved.py  # Optional: redraw panels a/c from cached results
 
-# 6. Archean application
-# Missing values are encoded but not imputed; candidate pool: 3,483; final set: 3,012.
-python 06_archean_application/extended_archean_pool_analysis.py
+# 6. Archean prediction from the Zenodo candidate pool
+# Requires the trained model and the generated quantile parameters.
+# With only the three Zenodo files, prediction-only mode is automatic.
 python 06_archean_application/standardize_craton_names.py
 python 06_archean_application/archean_vit_transformer_dualstream_predict_analysis.py
-python 06_archean_application/archean_time_evolution.py
-python 06_archean_application/archean_time_evolution_sensitivity.py
-python 06_archean_application/archean_case_studies_map_ridgeline.py
 
 # 7. Data-distribution figures
 python 07_figures/selected_element_boxplots.py
-python 07_figures/distribution_elevation.py  # Optional: requires a user-provided world basemap
+python 07_figures/distribution_elevation.py  # Optional: requires a world basemap
 ```
+
+The time-evolution, sensitivity, and six-craton case-study figures require the
+additional Liu et al. source table and case-study CSV files under
+`data/archean/data/`. Those supplementary files are not part of the minimal
+three-file Zenodo release.
+
+The original GEOROC/PetDB filtering commands remain available as optional
+historical reconstruction tools:
+
+```bash
+python 01_preprocessing/filter/extract_georoc.py
+python 01_preprocessing/filter/extract_petdb.py
+python 01_preprocessing/combine_list.py
+python 06_archean_application/extended_archean_pool_analysis.py
+```
+
+They require upstream raw tables that are not included in the Zenodo release.
 
 The imputation script reuses an existing result only when the cached training
 and test labels match the current split. Set
@@ -253,30 +262,31 @@ running the workflow.
 
 - **Data DOI:** [10.5281/zenodo.20736587](https://doi.org/10.5281/zenodo.20736587)
 
-The streamlined Zenodo release, `basalt_geochemistry_dataset`, contains three
-key tables. It does not include intermediate outputs such as dataset splits,
-imputed tables, SMOTE results, or 1–255 encoded tables; these are regenerated
-by the scripts described in [docs/workflow.md](docs/workflow.md).
+The streamlined Zenodo release, `basalt_geochemistry_dataset`, contains exactly
+three tables. Keep the downloaded directory unchanged:
 
-After downloading the files, arrange them as follows:
+```text
+data/basalt_geochemistry_dataset/modern_basalt_geochemistry.csv
+data/basalt_geochemistry_dataset/archean_basalt_geochemistry.csv
+data/basalt_geochemistry_dataset/archean_basalt_geodan_predictions.csv
+```
 
-| Zenodo file | Rows | Destination in the repository | Role in the workflow |
-|---|---:|---|---|
-| `modern_basalt_geochemistry.csv` | 30,547 | `data/03_combined/01_basalt_number_year.csv` | Combined modern-basalt table used as input for the training/test split |
-| `archean_basalt_geochemistry.csv` | 3,483 | `data/archean/outputs/extended_archean_pool/expanded_archean_basalt_age_nonmissing.csv` | Archean candidate pool with missing values retained |
-| `archean_basalt_geodan_predictions.csv` | 3,012 | `data/archean/outputs/archean_geodan_final/expanded_archean_predictions.csv` | Final GeoDAN prediction table |
+The scripts read these files directly. Intermediate outputs such as dataset
+splits, imputed tables, SMOTE results, and 1–255 encoded tables are regenerated
+under `data/04_split/`, `data/05_imputed/`, and `data/06_normalized/`.
 
-Once these files are in place, the modern-basalt workflow can be reproduced
-from the training/test split onward, and the Archean predictions and downstream
-figures can be reproduced directly.
+Once the three files are present, the modern training workflow can be
+reproduced from `split_train_test.py` onward. The published 3,012-row Archean
+prediction table is available immediately; generating a new Archean prediction
+requires locally trained model weights.
 
-The streamlined release does not include the original GEOROC and PetDB tables,
-the convergent-margin subclassification output, the original Archean table from
-Liu et al. (2024), or model weights. Reproducing the earliest filtering and
-candidate-pool construction stages therefore requires these upstream inputs.
-The original modern-basalt data are available from **GEOROC** and **PetDB**,
-while convergent-margin tectonic-setting subclassification is generated by the
-independent `convergent_margin_reclass` project.
+The minimal release does not include the original GEOROC and PetDB tables, the
+convergent-margin subclassification output, the original Liu et al. (2024)
+source table, the six case-study CSV files, or model weights. Reproducing the
+earliest filtering and extended case-study stages therefore requires those
+additional upstream inputs. The optional historical preprocessing tools use
+**GEOROC** and **PetDB** data, while convergent-margin subclassification is
+generated by the independent `convergent_margin_reclass` project.
 
 Model weights (`.pth`) are not included in the repository. To run predictions
 without retraining, request the weights from the author or train the model

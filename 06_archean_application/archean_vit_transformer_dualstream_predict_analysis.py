@@ -2713,17 +2713,22 @@ FINAL_MODEL_WEIGHT_PATH = Path(str(MAIN_MODEL_WEIGHT))
 FINAL_OUTPUT_DIR = Path(str(ARCHEAN_FINAL_DIR))
 FINAL_PREDICTION_PATH = Path(str(ARCHEAN_FINAL_PREDICTIONS_CSV))
 FINAL_COMPOSITE_PATH = FINAL_OUTPUT_DIR / "fig_main_composite_tectonic.png"
-# Code Ocean 精简数据资产不包含 Liu 原始表和案例区文件；开启后只生成预测表。
-PREDICTION_ONLY = os.environ.get("GEODAN_PREDICTION_ONLY", "0") == "1"
+# 中文注释：三文件Zenodo发布不包含Liu原始表和六个案例区文件。
+# 缺少这些可选资料时自动切换为仅预测模式，避免主预测流程被附加图件阻断。
+PREDICTION_ONLY = (
+    os.environ.get("GEODAN_PREDICTION_ONLY", "0") == "1"
+    or not SOURCE_S3_CSV_PATH.exists()
+)
 def run_final_prediction() -> None:
     """运行固定正文方案：CFB=6920、显式缺失编码、SiO2 44-53 wt%。"""
     required_paths = [
         FINAL_ARCHEAN_RAW_PATH,
         QUANTILE_PARAMS_PATH,
         FINAL_MODEL_WEIGHT_PATH,
-        SOURCE_S3_CSV_PATH,
         TRAIN_PATH,
     ]
+    if not PREDICTION_ONLY:
+        required_paths.append(SOURCE_S3_CSV_PATH)
     missing_paths = [path for path in required_paths if not path.exists()]
     if missing_paths:
         raise FileNotFoundError(
